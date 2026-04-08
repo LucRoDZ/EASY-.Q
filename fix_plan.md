@@ -22,7 +22,7 @@ All infrastructure components are in place:
 ### Missing from Phase 0
 
 - ✅ Create migration 004 for missing tables: restaurant_profiles, payments (subscriptions, chat_sessions, audit_logs were already in 001)
-- [ ] Add AuditLog service with helper functions (log_action, query_logs)
+- ✅ Add AuditLog service with helper functions (log_action, query_logs, convenience helpers)
 - [ ] Verify all environment variables are documented in .env.example
 - [ ] Create health check endpoint `/api/v1/health` (check DB, Redis, R2 connectivity)
 
@@ -353,6 +353,8 @@ All infrastructure components are in place:
 
 ## Current Priority: Backend Infrastructure
 
-**COMPLETED**: ✅ Migration 004 created for restaurant_profiles and payments tables
+**COMPLETED**:
+- ✅ Migration 004 created for restaurant_profiles and payments tables
+- ✅ AuditLog service with comprehensive helpers and tests
 
-**NEXT TASK**: Add AuditLog service with helper functions (log_action, query_logs)
+**NEXT TASK**: Verify all environment variables are documented in .env.example
