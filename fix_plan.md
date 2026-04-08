@@ -23,7 +23,7 @@ All infrastructure components are in place:
 
 - ✅ Create migration 004 for missing tables: restaurant_profiles, payments (subscriptions, chat_sessions, audit_logs were already in 001)
 - ✅ Add AuditLog service with helper functions (log_action, query_logs, convenience helpers)
-- [ ] Verify all environment variables are documented in .env.example
+- ✅ Verify all environment variables are documented in .env.example
 - [ ] Create health check endpoint `/api/v1/health` (check DB, Redis, R2 connectivity)
 
 ---
