@@ -24,7 +24,7 @@ All infrastructure components are in place:
 - ✅ Create migration 004 for missing tables: restaurant_profiles, payments (subscriptions, chat_sessions, audit_logs were already in 001)
 - ✅ Add AuditLog service with helper functions (log_action, query_logs, convenience helpers)
 - ✅ Verify all environment variables are documented in .env.example
-- [ ] Create health check endpoint `/api/v1/health` (check DB, Redis, R2 connectivity)
+- ✅ Create health check endpoint `/api/v1/health` (check DB, Redis, R2 connectivity)
 
 ---
 
@@ -36,23 +36,23 @@ All infrastructure components are in place:
 - ✅ Backend: POST /api/v1/menus/upload exists
 - ✅ OCR service with Gemini Vision exists
 
-[ ] **Test OCR flow end-to-end** — upload PDF → OCR processing → menu ready
-[ ] Add retry logic for failed OCR (max 3 attempts with exponential backoff)
-[ ] Add support for image upload (JPG/PNG) in addition to PDF
-[ ] Add OCR result validation with Pydantic schema
-[ ] Implement OCR cache using Redis (key: PDF sha256, TTL: 24h)
+- ✅ **Test OCR flow end-to-end** — upload PDF → OCR processing → menu ready
+- ✅ Add retry logic for failed OCR (max 3 attempts with exponential backoff)
+[x] Add support for image upload (JPG/PNG) in addition to PDF
+[x] Add OCR result validation with Pydantic schema
+[x] Implement OCR cache using Redis (key: PDF sha256, TTL: 24h)
 
 ### 1.2 Menu Editor
 
 - ✅ Frontend: MenuEditorPage.jsx exists
 - ✅ Backend: PATCH /api/v1/menus/{id} exists
 
-[ ] **Test menu editor** — edit sections, items, prices, allergens, tags
-[ ] Add drag-and-drop reordering for sections and items
-[ ] Add AllergenIcons component with all 14 EU allergens
-[ ] Add real-time preview panel (mobile view)
-[ ] Add menu versioning (save drafts vs published)
-[ ] Add menu duplication feature
+[x] **Test menu editor** — edit sections, items, prices, allergens, tags
+[x] Add drag-and-drop reordering for sections and items
+[x] Add AllergenIcons component with all 14 EU allergens
+[x] Add real-time preview panel (mobile view)
+[x] Add menu versioning (save drafts vs published)
+[x] Add menu duplication feature
 
 ### 1.3 Translation
 
