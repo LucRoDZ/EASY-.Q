@@ -96,14 +96,24 @@ export default function CartPage() {
             </div>
 
             <div className="mt-6 bg-white rounded-xl border border-neutral-200 p-5">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-neutral-600">
-                  {itemCount} {itemCount === 1 ? t(lang, 'item') : t(lang, 'items')}
-                </span>
-                <div className="text-right">
-                  <span className="text-sm text-neutral-500">{t(lang, 'total')}</span>
-                  <p className="text-2xl font-bold text-neutral-900">{formatPrice(total, currency)}</p>
+              {/* Item count + VAT breakdown */}
+              <div className="space-y-2 mb-4 pb-4 border-b border-neutral-100">
+                <div className="flex justify-between text-sm text-neutral-600">
+                  <span>{itemCount} {itemCount === 1 ? t(lang, 'item') : t(lang, 'items')}</span>
+                  <span>{formatPrice(total, currency)}</span>
                 </div>
+                <div className="flex justify-between text-xs text-neutral-400">
+                  <span>TVA 10% (plats)</span>
+                  <span>{formatPrice(total * 0.1 / 1.1, currency)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-neutral-400">
+                  <span>TVA 20% (boissons alcoolisées)</span>
+                  <span>—</span>
+                </div>
+              </div>
+              <div className="flex justify-between items-center mb-4">
+                <span className="font-semibold text-neutral-800">{t(lang, 'total')}</span>
+                <p className="text-2xl font-bold text-neutral-900">{formatPrice(total, currency)}</p>
               </div>
 
               <button

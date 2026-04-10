@@ -113,8 +113,8 @@ All infrastructure components are in place:
 
 [x] **Move CartPage** — src/pages/CartPage.jsx → src/features/client/CartPage.jsx
 [ ] Test cart — add items, modify quantities, add notes per item
-[ ] Add cart persistence (localStorage + BroadcastChannel for multi-tab sync)
-[ ] Display VAT breakdown (10% food, 20% alcohol)
+[x] Add cart persistence (localStorage + BroadcastChannel for multi-tab sync)
+[x] Display VAT breakdown (10% food, 20% alcohol)
 [ ] Add cart validation (min order amount, availability check)
 [ ] Create Order model (table_id, items JSONB, status, total, created_at)
 [ ] Create POST /api/v1/orders endpoint
@@ -124,7 +124,7 @@ All infrastructure components are in place:
 - ✅ Frontend: ChatWidget.jsx exists (in both src/components and src/features/client)
 - ✅ Backend: POST /api/v1/public/chat (SSE streaming) exists
 
-[ ] **Consolidate duplicate ChatWidget** — keep src/features/client version, remove src/components
+[x] **Consolidate duplicate ChatWidget** — keep src/features/client version, remove src/components
 [ ] Test chatbot — ask questions, get menu recommendations
 [ ] Implement Redis session storage (TTL 2h)
 [ ] Add chatbot context (menu + allergens + dietary preferences)
