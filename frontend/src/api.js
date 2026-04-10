@@ -210,8 +210,15 @@ export const api = {
     }
   },
 
-  async downloadTableQrPdf(menuSlug, restaurantName = 'Restaurant') {
-    const params = new URLSearchParams({ menu_slug: menuSlug, restaurant_name: restaurantName });
+  async downloadTableQrPdf(menuSlug, restaurantName = 'Restaurant', qrSettings = {}) {
+    const { fillColor = 'black', backColor = 'white', showLogo = false } = qrSettings;
+    const params = new URLSearchParams({
+      menu_slug: menuSlug,
+      restaurant_name: restaurantName,
+      fill_color: fillColor,
+      back_color: backColor,
+      logo: showLogo ? 'true' : 'false',
+    });
     const res = await fetch(`${API_BASE}/api/v1/tables/export/qr-pdf?${params}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

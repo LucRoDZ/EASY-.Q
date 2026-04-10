@@ -59,22 +59,22 @@ All infrastructure components are in place:
 - ✅ Frontend: TranslatorPage.jsx exists
 - ✅ Backend: POST /api/v1/menus/translate exists
 
-[ ] **Test translation flow** — translate FR→EN, FR→ES
-[ ] Add translation memory (cache common translations)
-[ ] Add bulk translate button (entire menu at once)
-[ ] Add manual override for AI translations
-[ ] Store translations in Menu.menu_data JSONB (not separate table)
+[x] **Test translation flow** — translate FR→EN, FR→ES
+[x] Add translation memory (cache common translations)
+[x] Add bulk translate button (entire menu at once)
+[x] Add manual override for AI translations
+[x] Store translations in Menu.menu_data JSONB (not separate table)
 
 ### 1.4 Restaurant Settings
 
 - ✅ Frontend: RestaurantSettingsPage.jsx exists
 - ✅ Backend: GET/PATCH /api/v1/restaurants/{slug} exists
 
-[ ] **Test restaurant settings** — update name, address, phone, hours, logo
-[ ] Add logo upload with image resize/optimize (max 500KB, 512x512px)
-[ ] Add opening hours editor (7 days, open/close times, closed toggle)
-[ ] Add timezone selector
-[ ] Add social media links (Instagram, Facebook, Google Maps)
+[x] **Test restaurant settings** — update name, address, phone, hours, logo
+[x] Add logo upload with image resize/optimize (max 500KB, 512x512px)
+[x] Add opening hours editor (7 days, open/close times, closed toggle)
+[x] Add timezone selector
+[x] Add social media links (Instagram, Facebook, Google Maps)
 
 ### 1.5 Tables & QR Codes
 
@@ -82,11 +82,11 @@ All infrastructure components are in place:
 - ✅ Backend: POST /api/v1/tables/bulk, GET /api/v1/tables exists
 - ✅ QR service exists
 
-[ ] **Test table creation** — bulk create 10 tables, generate QR codes
+[x] **Test table creation** — bulk create 10 tables, generate QR codes
 [ ] Add table layout visual editor (drag-and-drop floor plan)
-[ ] Add QR code PDF export for printing (all tables, 6 per page)
-[ ] Add QR code customization (logo overlay, colors)
-[ ] Add table status tracking (occupied, reserved, available)
+[x] Add QR code PDF export for printing (all tables, 6 per page)
+[x] Add QR code customization (logo overlay, colors)
+[x] Add table status tracking (occupied, reserved, available)
 
 ---
 
@@ -97,10 +97,10 @@ All infrastructure components are in place:
 - ✅ Frontend: MenuPage.jsx exists (in both src/pages and src/features/client)
 - ✅ Backend: GET /api/v1/public/menu/{slug} exists
 
-[ ] **Consolidate duplicate MenuPage** — move src/pages/MenuPage.jsx to src/features/client, remove duplicate
+[x] **Consolidate duplicate MenuPage** — move src/pages/MenuPage.jsx to src/features/client, remove duplicate
 [ ] Test menu view — sections, items, allergens, prices
-[ ] Add CartSummaryBar sticky bottom bar
-[ ] Add floating language selector (FR/EN/ES)
+[x] Add CartSummaryBar sticky bottom bar
+[x] Add floating language selector (FR/EN/ES)
 [ ] Add menu search/filter (vegetarian, vegan, allergen-free)
 [ ] Add item detail modal (full description, nutrition info)
 [ ] Implement PWA manifest and service worker
