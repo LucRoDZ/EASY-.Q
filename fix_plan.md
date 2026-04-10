@@ -127,7 +127,7 @@ All infrastructure components are in place:
 [x] **Consolidate duplicate ChatWidget** — keep src/features/client version, remove src/components
 [ ] Test chatbot — ask questions, get menu recommendations
 [x] Implement Redis session storage (TTL 2h)
-[ ] Add chatbot context (menu + allergens + dietary preferences)
+[x] Add chatbot context (menu + allergens + dietary preferences)
 [x] Add multi-language support (detect user language, respond in same language)
 [x] Add chat history persistence (last 10 messages)
 [x] Add suggested questions UI
@@ -150,8 +150,8 @@ All infrastructure components are in place:
 
 ### 3.1 Tip Selection
 
-[ ] Create TipPage.jsx — preset amounts (5%, 10%, 15%, custom)
-[ ] Add "No tip" option
+[x] Create TipPage.jsx — preset amounts (5%, 10%, 15%, custom)
+[x] Add "No tip" option
 [ ] Store tip_amount in Payment model
 [ ] Update cart total calculation to include tip
 

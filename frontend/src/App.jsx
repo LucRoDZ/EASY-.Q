@@ -12,6 +12,7 @@ import TablesPage from './features/restaurant/TablesPage';
 import RestaurantDashboardPage from './features/restaurant/DashboardPage';
 import RestaurantSettingsPage from './features/restaurant/RestaurantSettingsPage';
 import CheckoutPage from './features/payment/CheckoutPage';
+import TipPage from './features/payment/TipPage';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/restaurant/:slug/settings" element={<RestaurantSettingsPage />} />
         <Route path="/menu/:slug" element={<ClientMenuPage />} />
         <Route path="/menu/:slug/cart" element={<CartPage />} />
+        <Route path="/menu/:slug/tip" element={<TipPage />} />
         <Route path="/menu/:slug/checkout" element={<CheckoutPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/dashboard/:slug" element={<DashboardConversationsPage />} />

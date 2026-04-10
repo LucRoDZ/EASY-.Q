@@ -133,7 +133,7 @@ export default function CartPage() {
                   const tableParam = searchParams.get('table');
                   const params = new URLSearchParams({ lang, currency });
                   if (tableParam) params.set('table', tableParam);
-                  navigate(`/menu/${slug}/checkout?${params}`);
+                  navigate(`/menu/${slug}/tip?${params}`);
                 }}
                 className="w-full bg-black text-white py-4 rounded-full font-semibold text-lg hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
