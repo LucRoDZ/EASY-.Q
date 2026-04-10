@@ -212,6 +212,7 @@ class TableUpdateBody(BaseModel):
     label: Optional[str] = None
     capacity: Optional[int] = None
     is_active: Optional[bool] = None
+    status: Optional[str] = None  # available, occupied, reserved
 
 
 class TableResponse(BaseModel):
@@ -223,6 +224,7 @@ class TableResponse(BaseModel):
     qr_token: str
     qr_url: str        # backend URL to GET the QR image
     is_active: bool
+    status: str = "available"
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +243,12 @@ class SaveTranslationBody(BaseModel):
     wines: list[dict] = []
 
 
+class BulkTranslateResponse(BaseModel):
+    menu_id: int
+    languages: list[str]
+    errors: dict[str, str] = {}
+
+
 # ---------------------------------------------------------------------------
 # Restaurant profile schemas
 # ---------------------------------------------------------------------------
@@ -257,6 +265,8 @@ class RestaurantProfileUpdate(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     opening_hours: Optional[dict] = None  # {day: DayHours}
+    timezone: Optional[str] = None
+    social_links: Optional[dict] = None   # {instagram, facebook, google_maps}
 
 
 class RestaurantProfileResponse(BaseModel):
@@ -266,6 +276,8 @@ class RestaurantProfileResponse(BaseModel):
     address: Optional[str] = None
     phone: Optional[str] = None
     opening_hours: Optional[dict] = None
+    timezone: Optional[str] = None
+    social_links: Optional[dict] = None
 
 
 class LogoUploadResponse(BaseModel):
@@ -304,3 +316,43 @@ class PaymentIntentResponse(BaseModel):
     payment_intent_id: str
     amount: int                    # total in cents
     currency: str
+
+
+# ---------------------------------------------------------------------------
+# Order schemas
+# ---------------------------------------------------------------------------
+
+class OrderItemCreate(BaseModel):
+    name: str
+    price: float    # euros
+    quantity: int = 1
+
+
+class OrderCreate(BaseModel):
+    menu_slug: str
+    table_token: Optional[str] = None
+    items: list[OrderItemCreate]
+    currency: str = "eur"
+    notes: Optional[str] = None
+
+    @field_validator("items")
+    @classmethod
+    def validate_items_not_empty(cls, v: list) -> list:
+        if not v:
+            raise ValueError("Order must contain at least one item")
+        return v
+
+
+class OrderResponse(BaseModel):
+    id: int
+    menu_slug: str
+    table_token: Optional[str] = None
+    items: list[dict]
+    total: int          # cents
+    currency: str
+    status: str
+    notes: Optional[str] = None
+    created_at: str
+
+    class Config:
+        from_attributes = True

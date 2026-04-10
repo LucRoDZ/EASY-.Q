@@ -116,8 +116,8 @@ All infrastructure components are in place:
 [x] Add cart persistence (localStorage + BroadcastChannel for multi-tab sync)
 [x] Display VAT breakdown (10% food, 20% alcohol)
 [ ] Add cart validation (min order amount, availability check)
-[ ] Create Order model (table_id, items JSONB, status, total, created_at)
-[ ] Create POST /api/v1/orders endpoint
+[x] Create Order model (table_id, items JSONB, status, total, created_at)
+[x] Create POST /api/v1/orders endpoint
 
 ### 2.3 AI Chatbot
 

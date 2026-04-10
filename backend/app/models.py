@@ -77,6 +77,7 @@ class Table(Base):
     capacity = Column(Integer, nullable=False, default=4)
     qr_token = Column(String(36), nullable=False, unique=True, index=True)  # UUID v4
     is_active = Column(Boolean, nullable=False, default=True)
+    status = Column(String(20), nullable=False, default="available")  # available, occupied, reserved
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -91,6 +92,8 @@ class RestaurantProfile(Base):
     address = Column(String(500), nullable=True)
     phone = Column(String(50), nullable=True)
     opening_hours = Column(JSON, nullable=True)  # {"lundi": {"open": "09:00", "close": "22:00", "closed": false}, ...}
+    timezone = Column(String(100), nullable=True, default="Europe/Paris")
+    social_links = Column(JSON, nullable=True)   # {"instagram": url, "facebook": url, "google_maps": url}
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -108,6 +111,25 @@ class Payment(Base):
     currency = Column(String(10), nullable=False, default="eur")
     status = Column(String(20), nullable=False, default="pending")  # pending|succeeded|failed
     items = Column(JSON, nullable=True)            # cart snapshot [{name, price, quantity}]
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Order(Base):
+    """Commande passée via le menu client."""
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    menu_slug = Column(String(100), nullable=False, index=True)
+    table_id = Column(Integer, ForeignKey("tables.id"), nullable=True)
+    table_token = Column(String(36), nullable=True, index=True)
+    items = Column(JSON, nullable=False, default=list)   # [{name, price, quantity}]
+    total = Column(Integer, nullable=False, default=0)   # in cents
+    currency = Column(String(10), nullable=False, default="eur")
+    status = Column(String(20), nullable=False, default="pending")  # pending|confirmed|ready|done
+    notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
