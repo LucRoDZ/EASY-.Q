@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Loader2, Download, Plus, QrCode, Trash2, AlertCircle, Palette, ChevronDown, ChevronUp,
+  LayoutGrid, List,
 } from 'lucide-react';
 import { api } from '../../api';
 
@@ -269,6 +270,220 @@ function TableCard({ table, qrSrc, onDelete }) {
   );
 }
 
+// ─── FloorPlanEditor ──────────────────────────────────────────────────────────
+
+const FLOOR_W = 800;
+const FLOOR_H = 520;
+const TABLE_W = 80;
+const TABLE_H = 60;
+
+const STATUS_COLORS = {
+  available: { bg: '#f0fdf4', border: '#16a34a', text: '#15803d' },
+  occupied:  { bg: '#fef2f2', border: '#dc2626', text: '#b91c1c' },
+  reserved:  { bg: '#fffbeb', border: '#d97706', text: '#b45309' },
+};
+
+function FloorPlanEditor({ tables, menuSlug }) {
+  const canvasRef = useRef(null);
+  const storageKey = `floorplan_${menuSlug}`;
+
+  // Load positions from localStorage; default to a grid layout
+  const [positions, setPositions] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    // Auto-arrange in rows of 6
+    const cols = 6;
+    const padX = 30;
+    const padY = 30;
+    const gapX = 110;
+    const gapY = 90;
+    return Object.fromEntries(
+      tables.map((t, i) => [
+        t.id,
+        { x: padX + (i % cols) * gapX, y: padY + Math.floor(i / cols) * gapY },
+      ])
+    );
+  });
+
+  const [dragging, setDragging] = useState(null); // { id, offsetX, offsetY }
+
+  // Persist whenever positions change
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify(positions));
+  }, [positions, storageKey]);
+
+  // Re-arrange new tables that don't have a position yet
+  useEffect(() => {
+    setPositions((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      tables.forEach((t, i) => {
+        if (next[t.id] === undefined) {
+          const cols = 6;
+          next[t.id] = { x: 30 + (i % cols) * 110, y: 30 + Math.floor(i / cols) * 90 };
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [tables]);
+
+  const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
+  const handleMouseDown = (e, id) => {
+    e.preventDefault();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const pos = positions[id] || { x: 0, y: 0 };
+    setDragging({
+      id,
+      offsetX: e.clientX - rect.left - pos.x,
+      offsetY: e.clientY - rect.top - pos.y,
+    });
+  };
+
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (!dragging) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = clamp(e.clientX - rect.left - dragging.offsetX, 0, FLOOR_W - TABLE_W);
+      const y = clamp(e.clientY - rect.top - dragging.offsetY, 0, FLOOR_H - TABLE_H);
+      setPositions((prev) => ({ ...prev, [dragging.id]: { x, y } }));
+    },
+    [dragging]
+  );
+
+  const handleMouseUp = useCallback(() => setDragging(null), []);
+
+  const handleReset = () => {
+    const cols = 6;
+    const next = Object.fromEntries(
+      tables.map((t, i) => [
+        t.id,
+        { x: 30 + (i % cols) * 110, y: 30 + Math.floor(i / cols) * 90 },
+      ])
+    );
+    setPositions(next);
+  };
+
+  if (tables.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-neutral-200 p-8 text-center text-neutral-400 text-sm">
+        Créez d&apos;abord des tables pour les positionner sur le plan.
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
+        <p className="text-sm font-semibold text-neutral-800">Plan de salle</p>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4 text-xs text-neutral-500">
+            {Object.entries(STATUS_COLORS).map(([status, c]) => (
+              <span key={status} className="flex items-center gap-1">
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-sm border"
+                  style={{ background: c.bg, borderColor: c.border }}
+                />
+                {status === 'available' ? 'Libre' : status === 'occupied' ? 'Occupée' : 'Réservée'}
+              </span>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="text-xs text-neutral-500 hover:text-neutral-800 underline underline-offset-2"
+          >
+            Réinitialiser
+          </button>
+        </div>
+      </div>
+
+      {/* Canvas */}
+      <div
+        ref={canvasRef}
+        className="relative overflow-auto bg-neutral-50 select-none"
+        style={{ width: '100%', height: FLOOR_H }}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        {/* Subtle grid pattern */}
+        <svg
+          className="absolute inset-0 pointer-events-none"
+          width={FLOOR_W}
+          height={FLOOR_H}
+          style={{ opacity: 0.3 }}
+        >
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#94a3b8" strokeWidth="0.5" />
+            </pattern>
+          </defs>
+          <rect width={FLOOR_W} height={FLOOR_H} fill="url(#grid)" />
+        </svg>
+
+        {tables.map((table) => {
+          const pos = positions[table.id] || { x: 0, y: 0 };
+          const colors = STATUS_COLORS[table.status] || STATUS_COLORS.available;
+          const isDraggingThis = dragging?.id === table.id;
+
+          return (
+            <div
+              key={table.id}
+              style={{
+                position: 'absolute',
+                left: pos.x,
+                top: pos.y,
+                width: TABLE_W,
+                height: TABLE_H,
+                background: colors.bg,
+                border: `2px solid ${isDraggingThis ? '#000' : colors.border}`,
+                borderRadius: 8,
+                cursor: isDraggingThis ? 'grabbing' : 'grab',
+                boxShadow: isDraggingThis ? '0 4px 16px rgba(0,0,0,0.15)' : '0 1px 4px rgba(0,0,0,0.06)',
+                zIndex: isDraggingThis ? 20 : 10,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                userSelect: 'none',
+                transition: isDraggingThis ? 'none' : 'box-shadow 0.15s',
+              }}
+              onMouseDown={(e) => handleMouseDown(e, table.id)}
+            >
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#111' }}>
+                {table.number}
+              </span>
+              {table.label && (
+                <span style={{ fontSize: 9, color: colors.text, marginTop: 2 }}>
+                  {table.label}
+                </span>
+              )}
+              <span
+                style={{
+                  fontSize: 9,
+                  color: colors.text,
+                  marginTop: 2,
+                  textTransform: 'capitalize',
+                }}
+              >
+                {table.status === 'available' ? 'Libre' : table.status === 'occupied' ? 'Occupée' : 'Réservée'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="px-5 py-2.5 text-xs text-neutral-400 border-t border-neutral-100">
+        Glissez les tables pour les repositionner. Les positions sont sauvegardées localement.
+      </p>
+    </div>
+  );
+}
+
 // ─── TablesPage ───────────────────────────────────────────────────────────────
 
 export default function TablesPage() {
@@ -277,6 +492,7 @@ export default function TablesPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [view, setView] = useState('list'); // 'list' | 'floorplan'
   const [qrSettings, setQrSettings] = useState({
     fillColor: '#000000',
     backColor: '#ffffff',
@@ -342,19 +558,45 @@ export default function TablesPage() {
             </h1>
           </div>
 
-          <button
-            type="button"
-            onClick={handleExportPDF}
-            disabled={exporting || tables.length === 0}
-            className="flex items-center gap-2 text-sm bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full transition-colors disabled:opacity-40"
-          >
-            {exporting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            Exporter PDF
-          </button>
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex bg-white/10 rounded-full p-0.5">
+              <button
+                type="button"
+                onClick={() => setView('list')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  view === 'list' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
+                }`}
+              >
+                <List className="h-3.5 w-3.5" />
+                Liste
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('floorplan')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  view === 'floorplan' ? 'bg-white text-black' : 'text-white hover:bg-white/10'
+                }`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Plan
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              disabled={exporting || tables.length === 0}
+              className="flex items-center gap-2 text-sm bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full transition-colors disabled:opacity-40"
+            >
+              {exporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Exporter PDF
+            </button>
+          </div>
         </div>
       </header>
 
@@ -365,7 +607,7 @@ export default function TablesPage() {
         {/* QR customization */}
         <QrCustomizer settings={qrSettings} onChange={setQrSettings} />
 
-        {/* Tables grid */}
+        {/* Tables list / floor plan */}
         {loading ? (
           <div className="flex items-center gap-2 text-neutral-500">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -376,6 +618,8 @@ export default function TablesPage() {
             <AlertCircle className="h-5 w-5" />
             {loadError}
           </div>
+        ) : view === 'floorplan' ? (
+          <FloorPlanEditor tables={tables} menuSlug={menuSlug} />
         ) : tables.length === 0 ? (
           <div className="bg-white rounded-xl border border-neutral-200 p-8 text-center text-neutral-400 text-sm">
             Aucune table créée. Utilisez le formulaire ci-dessus pour commencer.

@@ -83,7 +83,7 @@ All infrastructure components are in place:
 - ✅ QR service exists
 
 [x] **Test table creation** — bulk create 10 tables, generate QR codes
-[ ] Add table layout visual editor (drag-and-drop floor plan)
+[x] Add table layout visual editor (drag-and-drop floor plan)
 [x] Add QR code PDF export for printing (all tables, 6 per page)
 [x] Add QR code customization (logo overlay, colors)
 [x] Add table status tracking (occupied, reserved, available)
@@ -101,17 +101,17 @@ All infrastructure components are in place:
 [ ] Test menu view — sections, items, allergens, prices
 [x] Add CartSummaryBar sticky bottom bar
 [x] Add floating language selector (FR/EN/ES)
-[ ] Add menu search/filter (vegetarian, vegan, allergen-free)
-[ ] Add item detail modal (full description, nutrition info)
-[ ] Implement PWA manifest and service worker
-[ ] Add "Add to Home Screen" prompt
+[x] Add menu search/filter (vegetarian, vegan, allergen-free)
+[x] Add item detail modal (full description, nutrition info)
+[x] Implement PWA manifest and service worker
+[x] Add "Add to Home Screen" prompt
 
 ### 2.2 Cart & Checkout
 
 - ✅ Frontend: CartPage.jsx exists (in src/pages)
 - [ ] Backend: POST /api/v1/orders missing
 
-[ ] **Move CartPage** — src/pages/CartPage.jsx → src/features/client/CartPage.jsx
+[x] **Move CartPage** — src/pages/CartPage.jsx → src/features/client/CartPage.jsx
 [ ] Test cart — add items, modify quantities, add notes per item
 [ ] Add cart persistence (localStorage + BroadcastChannel for multi-tab sync)
 [ ] Display VAT breakdown (10% food, 20% alcohol)
