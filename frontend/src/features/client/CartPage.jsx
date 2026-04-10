@@ -116,14 +116,26 @@ export default function CartPage() {
                 <p className="text-2xl font-bold text-neutral-900">{formatPrice(total, currency)}</p>
               </div>
 
+              {/* Cart validation */}
+              {total < 5 && total > 0 && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                  {lang === 'fr'
+                    ? `Montant minimum : 5,00 €. Il manque ${formatPrice(5 - total, currency)}.`
+                    : lang === 'es'
+                    ? `Importe mínimo: 5,00 €. Faltan ${formatPrice(5 - total, currency)}.`
+                    : `Minimum order: ${formatPrice(5, currency)}. Add ${formatPrice(5 - total, currency)} more.`}
+                </p>
+              )}
+
               <button
+                disabled={total < 5}
                 onClick={() => {
                   const tableParam = searchParams.get('table');
                   const params = new URLSearchParams({ lang, currency });
                   if (tableParam) params.set('table', tableParam);
                   navigate(`/menu/${slug}/checkout?${params}`);
                 }}
-                className="w-full bg-black text-white py-4 rounded-full font-semibold text-lg hover:bg-neutral-800 transition-colors"
+                className="w-full bg-black text-white py-4 rounded-full font-semibold text-lg hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {t(lang, 'pay')} · {formatPrice(total, currency)}
               </button>

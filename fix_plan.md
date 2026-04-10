@@ -115,7 +115,7 @@ All infrastructure components are in place:
 [ ] Test cart — add items, modify quantities, add notes per item
 [x] Add cart persistence (localStorage + BroadcastChannel for multi-tab sync)
 [x] Display VAT breakdown (10% food, 20% alcohol)
-[ ] Add cart validation (min order amount, availability check)
+[x] Add cart validation (min order amount, availability check)
 [x] Create Order model (table_id, items JSONB, status, total, created_at)
 [x] Create POST /api/v1/orders endpoint
 
@@ -128,17 +128,17 @@ All infrastructure components are in place:
 [ ] Test chatbot — ask questions, get menu recommendations
 [x] Implement Redis session storage (TTL 2h)
 [ ] Add chatbot context (menu + allergens + dietary preferences)
-[ ] Add multi-language support (detect user language, respond in same language)
-[ ] Add chat history persistence (last 10 messages)
-[ ] Add suggested questions UI
-[ ] Add typing indicator and smooth streaming
+[x] Add multi-language support (detect user language, respond in same language)
+[x] Add chat history persistence (last 10 messages)
+[x] Add suggested questions UI
+[x] Add typing indicator and smooth streaming
 
 ### 2.4 Waiter Call
 
 - ✅ Backend: POST /api/v1/public/waiter/call exists
 - [ ] Frontend: WaiterCallButton missing
 
-[ ] Create WaiterCallButton component (FAB, bottom-right)
+[x] Create WaiterCallButton component (FAB, bottom-right)
 [ ] Test waiter call — send call, view in dashboard
 [ ] Add call status tracking (pending, acknowledged, resolved)
 [ ] Add call history for table

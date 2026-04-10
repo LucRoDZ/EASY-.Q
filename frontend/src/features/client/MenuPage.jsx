@@ -5,6 +5,7 @@ import { t } from '../../localization/translations';
 import { api } from '../../api';
 import MenuView, { SearchFilterBar } from '../../components/MenuView';
 import ChatWidget from './ChatWidget';
+import WaiterCallButton from './WaiterCallButton';
 import LanguageSelector from '../../components/LanguageSelector';
 import CartSummaryBar from '../../components/CartSummaryBar';
 import { useCart } from '../../context/CartContext';
@@ -74,7 +75,7 @@ export default function MenuPage() {
   const [error, setError] = useState('');
   const [activeSection, setActiveSection] = useState(0);
 
-  // Waiter call state
+  // Waiter call state (header bell — kept for mobile UX; WaiterCallButton FAB added separately)
   const [waiterState, setWaiterState] = useState('idle'); // 'idle' | 'loading' | 'sent' | 'error'
 
   // Search & filter state
@@ -289,6 +290,9 @@ export default function MenuPage() {
           activeFilters={activeFilters}
         />
       </main>
+
+      {/* ── Waiter call FAB ── */}
+      <WaiterCallButton slug={slug} tableToken={tableToken} lang={lang} />
 
       {/* ── Add to Home Screen banner ── */}
       {installBannerVisible && (
