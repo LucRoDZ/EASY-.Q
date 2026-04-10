@@ -126,7 +126,7 @@ All infrastructure components are in place:
 
 [x] **Consolidate duplicate ChatWidget** — keep src/features/client version, remove src/components
 [ ] Test chatbot — ask questions, get menu recommendations
-[ ] Implement Redis session storage (TTL 2h)
+[x] Implement Redis session storage (TTL 2h)
 [ ] Add chatbot context (menu + allergens + dietary preferences)
 [ ] Add multi-language support (detect user language, respond in same language)
 [ ] Add chat history persistence (last 10 messages)
