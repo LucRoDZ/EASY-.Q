@@ -107,11 +107,14 @@ class Payment(Base):
     menu_slug = Column(String(100), nullable=False, index=True)
     table_token = Column(String(36), nullable=True)
     payment_intent_id = Column(String(255), nullable=False, unique=True, index=True)
-    amount = Column(Integer, nullable=False)       # total in cents (incl. tip)
+    amount = Column(Integer, nullable=False)       # per-person amount in cents (incl. tip)
     tip_amount = Column(Integer, nullable=False, default=0)  # tip in cents
     currency = Column(String(10), nullable=False, default="eur")
     status = Column(String(20), nullable=False, default="pending")  # pending|succeeded|failed
     items = Column(JSON, nullable=True)            # cart snapshot [{name, price, quantity}]
+    split_count = Column(Integer, nullable=False, default=1)    # total persons splitting
+    split_index = Column(Integer, nullable=False, default=1)    # 1-based: which person
+    split_total = Column(Integer, nullable=True)                # total before split (cents)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -1,15 +1,27 @@
 """Payments router — Stripe Payment Intents + webhook.
 
 Routes (prefix /api/v1/payments):
-  POST /intent    — create a PaymentIntent for cart checkout
-  POST /webhook   — Stripe signed webhook handler
-  GET  /config    — return publishable key to the frontend (safe to expose)
+  POST /intent                           — create a PaymentIntent for cart checkout
+  POST /webhook                          — Stripe signed webhook handler
+  GET  /config                           — return publishable key to the frontend (safe to expose)
+  GET  /{payment_intent_id}/receipt.pdf  — download payment receipt as PDF
 """
 
+import io
 import logging
+from datetime import datetime
 
 import stripe
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    Paragraph, Spacer, SimpleDocTemplate, Table, TableStyle, HRFlowable
+)
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from sqlalchemy.orm import Session
 
 from app.config import (
@@ -120,6 +132,9 @@ def create_payment_intent(
         currency=body.currency.lower(),
         status="pending",
         items=[item.model_dump() for item in body.items],
+        split_count=persons,
+        split_index=body.split_index,
+        split_total=total_cents if persons > 1 else None,
     )
     db.add(payment)
     db.commit()
@@ -214,3 +229,159 @@ async def stripe_webhook(
             db.commit()
 
     return {"received": True}
+
+
+# ---------------------------------------------------------------------------
+# PDF Receipt
+# ---------------------------------------------------------------------------
+
+def _build_receipt_pdf(payment: Payment, restaurant_name: str) -> bytes:
+    """Generate a PDF receipt for a payment using reportlab."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=2 * cm,
+        rightMargin=2 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2 * cm,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "title", parent=styles["Heading1"], alignment=TA_CENTER, fontSize=22, spaceAfter=4
+    )
+    sub_style = ParagraphStyle(
+        "sub", parent=styles["Normal"], alignment=TA_CENTER, fontSize=10,
+        textColor=colors.HexColor("#737373"), spaceAfter=16
+    )
+    label_style = ParagraphStyle(
+        "label", parent=styles["Normal"], fontSize=9, textColor=colors.HexColor("#737373")
+    )
+    value_style = ParagraphStyle(
+        "value", parent=styles["Normal"], fontSize=11, textColor=colors.HexColor("#171717")
+    )
+    total_style = ParagraphStyle(
+        "total", parent=styles["Normal"], fontSize=16, fontName="Helvetica-Bold",
+        alignment=TA_RIGHT, textColor=colors.HexColor("#171717")
+    )
+
+    paid_at = payment.created_at or datetime.now()
+    paid_str = paid_at.strftime("%d/%m/%Y à %H:%M") if hasattr(paid_at, "strftime") else str(paid_at)
+    amount_str = f"{payment.amount / 100:.2f} {payment.currency.upper()}"
+
+    story = [
+        Paragraph("EASY.Q", title_style),
+        Paragraph("Reçu de paiement", sub_style),
+        HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e5e5e5")),
+        Spacer(1, 0.4 * cm),
+        Paragraph("Restaurant", label_style),
+        Paragraph(restaurant_name, value_style),
+        Spacer(1, 0.2 * cm),
+        Paragraph("Date", label_style),
+        Paragraph(paid_str, value_style),
+        Spacer(1, 0.2 * cm),
+        Paragraph("Référence", label_style),
+        Paragraph(payment.payment_intent_id or "—", ParagraphStyle(
+            "ref", parent=styles["Normal"], fontSize=9, textColor=colors.HexColor("#404040")
+        )),
+        Spacer(1, 0.4 * cm),
+        HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e5e5e5")),
+        Spacer(1, 0.4 * cm),
+    ]
+
+    # Items table
+    items = payment.items or []
+    if items:
+        table_data = [["Article", "Qté", "Prix"]]
+        for item in items:
+            name = item.get("name", "?")
+            qty = str(item.get("quantity", 1))
+            price = f"{item.get('price', 0):.2f} €"
+            table_data.append([name, qty, price])
+
+        col_widths = [10 * cm, 2 * cm, 4 * cm]
+        t = Table(table_data, colWidths=col_widths)
+        t.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#737373")),
+            ("FONTSIZE", (0, 1), (-1, -1), 11),
+            ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#171717")),
+            ("ALIGN", (1, 0), (1, -1), "CENTER"),
+            ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#e5e5e5")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fafafa")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(t)
+        story.append(Spacer(1, 0.4 * cm))
+        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e5e5e5")))
+        story.append(Spacer(1, 0.3 * cm))
+
+    # Split info
+    if payment.split_count and payment.split_count > 1:
+        story.append(Paragraph(
+            f"Partage : personne {payment.split_index}/{payment.split_count}",
+            label_style,
+        ))
+        if payment.split_total:
+            story.append(Paragraph(
+                f"Total table : {payment.split_total / 100:.2f} {payment.currency.upper()}",
+                label_style,
+            ))
+        story.append(Spacer(1, 0.2 * cm))
+
+    # Tip
+    if payment.tip_amount and payment.tip_amount > 0:
+        tip_str = f"Pourboire : {payment.tip_amount / 100:.2f} {payment.currency.upper()}"
+        story.append(Paragraph(tip_str, label_style))
+        story.append(Spacer(1, 0.1 * cm))
+
+    story.append(Paragraph(f"Total payé : {amount_str}", total_style))
+    story.append(Spacer(1, 0.6 * cm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#e5e5e5")))
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(Paragraph(
+        "Merci pour votre visite. Ce reçu est généré automatiquement par EASY.Q.",
+        ParagraphStyle("footer", parent=styles["Normal"], fontSize=8,
+                       textColor=colors.HexColor("#a3a3a3"), alignment=TA_CENTER),
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+@router.get("/{payment_intent_id}/receipt.pdf")
+def download_receipt(
+    payment_intent_id: str,
+    db: Session = Depends(get_db),
+):
+    """Download a PDF receipt for a succeeded payment."""
+    payment = (
+        db.query(Payment)
+        .filter(Payment.payment_intent_id == payment_intent_id)
+        .first()
+    )
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if payment.status != "succeeded":
+        raise HTTPException(status_code=400, detail="Receipt only available for succeeded payments")
+
+    # Look up restaurant name
+    profile = (
+        db.query(RestaurantProfile)
+        .filter(RestaurantProfile.slug == payment.menu_slug)
+        .first()
+    )
+    restaurant_name = profile.name if profile else payment.menu_slug
+
+    pdf_bytes = _build_receipt_pdf(payment, restaurant_name)
+
+    filename = f"receipt-{payment_intent_id[-8:]}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

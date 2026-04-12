@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle, XCircle, Star, ChevronRight, Home, UtensilsCrossed } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronRight, Home, UtensilsCrossed, Download } from 'lucide-react';
 import { api } from '../../api';
 
 // ─── NPS Survey ──────────────────────────────────────────────────────────────
@@ -248,6 +248,20 @@ export default function ThankYouPage() {
               <span>{t.retry}</span>
               <ChevronRight size={18} />
             </Link>
+          )}
+
+          {isSuccess && paymentIntentId && (
+            <a
+              href={`/api/v1/payments/${paymentIntentId}/receipt.pdf`}
+              download
+              className="flex items-center justify-between w-full bg-white text-neutral-700 border border-neutral-200 rounded-full px-5 py-3.5 font-medium hover:bg-neutral-50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Download size={16} className="text-neutral-500" />
+                <span>{lang === 'fr' ? 'Télécharger le reçu' : lang === 'es' ? 'Descargar recibo' : 'Download receipt'}</span>
+              </div>
+              <ChevronRight size={18} className="text-neutral-400" />
+            </a>
           )}
 
           <Link

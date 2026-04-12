@@ -166,14 +166,14 @@ All infrastructure components are in place:
 [x] Add payment confirmation animation
 [x] Implement Stripe webhook handler (/api/v1/payments/webhook)
 [x] Add payment receipt email (Resend)
-[ ] Add payment receipt PDF generation
+[x] Add payment receipt PDF generation
 
 ### 3.3 Bill Splitting
 
 [x] Create SplitBillPage.jsx — split by person, by item, or custom
 [x] Add split payment UI (multiple people pay separately)
 [x] Create multiple PaymentIntents for split bills
-[ ] Add split payment tracking in Order model
+[x] Add split payment tracking in Order model
 [ ] Test split payment flow end-to-end
 
 ### 3.4 Thank You & Review
@@ -183,7 +183,7 @@ All infrastructure components are in place:
 [x] Add optional open-ended feedback textarea
 [x] Store feedback in AuditLog or new Feedback model
 [x] Add Google review link (if rating >= 9)
-[ ] Send email to restaurant if NPS < 7
+[x] Send email to restaurant if NPS < 7
 [ ] Add review analytics to restaurant dashboard
 
 ---

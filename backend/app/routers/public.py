@@ -15,7 +15,7 @@ from app.schemas import (
     WaiterCallRequest,
     FeedbackRequest,
 )
-from app.models import AuditLog
+from app.models import AuditLog, RestaurantProfile
 from app.services.menu_service import (
     get_menu_by_slug,
     get_menu_data,
@@ -28,6 +28,7 @@ from app.services.conversation_service import (
     clear_conversation,
 )
 from app.services.langfuse_service import langfuse_service
+from app.services.email_service import send_low_nps_email
 from app.core import redis as redis_core
 
 
@@ -225,6 +226,20 @@ def submit_feedback(slug: str, body: FeedbackRequest, db: Session = Depends(get_
         db.commit()
     except Exception:
         db.rollback()
+
+    # Send low-NPS alert to restaurant owner (detractors: score < 7)
+    if body.nps_score < 7:
+        try:
+            profile = db.query(RestaurantProfile).filter(RestaurantProfile.slug == slug).first()
+            if profile and profile.owner_email:
+                send_low_nps_email(
+                    to=profile.owner_email,
+                    nps_score=body.nps_score,
+                    comment=body.comment or "",
+                    slug=slug,
+                )
+        except Exception:
+            pass  # Best-effort — never block the client
 
     return {"status": "ok"}
 
