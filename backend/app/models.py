@@ -88,6 +88,7 @@ class RestaurantProfile(Base):
     id = Column(Integer, primary_key=True, index=True)
     slug = Column(String(100), unique=True, nullable=False, index=True)  # linked to Menu.slug
     name = Column(String(255), nullable=False, default="")
+    owner_email = Column(String(255), nullable=True)   # for email notifications
     logo_url = Column(String(500), nullable=True)
     address = Column(String(500), nullable=True)
     phone = Column(String(50), nullable=True)

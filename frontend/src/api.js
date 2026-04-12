@@ -286,7 +286,7 @@ export const api = {
     return res.json(); // { publishable_key }
   },
 
-  async createPaymentIntent(slug, items, tipAmount = 0, currency = 'eur', tableToken = null) {
+  async createPaymentIntent(slug, items, tipAmount = 0, currency = 'eur', tableToken = null, splitPersons = 1, splitIndex = 1) {
     const res = await fetch(`${API_BASE}/api/v1/payments/intent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -296,13 +296,15 @@ export const api = {
         tip_amount: tipAmount,
         currency,
         table_token: tableToken,
+        split_persons: splitPersons,
+        split_index: splitIndex,
       }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Payment intent failed (${res.status})`);
     }
-    return res.json(); // { client_secret, payment_intent_id, amount, currency }
+    return res.json(); // { client_secret, payment_intent_id, amount, currency, split_total, split_persons }
   },
 
   // Waiter call

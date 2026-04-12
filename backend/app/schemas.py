@@ -261,6 +261,7 @@ class DayHours(BaseModel):
 
 class RestaurantProfileUpdate(BaseModel):
     name: Optional[str] = None
+    owner_email: Optional[str] = None
     logo_url: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
@@ -272,6 +273,7 @@ class RestaurantProfileUpdate(BaseModel):
 class RestaurantProfileResponse(BaseModel):
     slug: str
     name: str
+    owner_email: Optional[str] = None
     logo_url: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
@@ -321,13 +323,17 @@ class CreatePaymentIntentRequest(BaseModel):
     tip_amount: float = 0.0        # in euros
     currency: str = "eur"
     table_token: Optional[str] = None
+    split_persons: int = 1         # number of people splitting the bill
+    split_index: int = 1           # 1-based: which person is paying
 
 
 class PaymentIntentResponse(BaseModel):
     client_secret: str
     payment_intent_id: str
-    amount: int                    # total in cents
+    amount: int                    # per-person amount in cents
     currency: str
+    split_total: Optional[int] = None   # total before split (cents)
+    split_persons: int = 1
 
 
 # ---------------------------------------------------------------------------

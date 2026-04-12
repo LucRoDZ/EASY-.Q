@@ -163,16 +163,16 @@ All infrastructure components are in place:
 [x] Test checkout — Stripe Elements, card payment
 [x] Add Apple Pay / Google Pay support
 [x] Add payment loading states and error handling
-[ ] Add payment confirmation animation
+[x] Add payment confirmation animation
 [x] Implement Stripe webhook handler (/api/v1/payments/webhook)
-[ ] Add payment receipt email (Resend)
+[x] Add payment receipt email (Resend)
 [ ] Add payment receipt PDF generation
 
 ### 3.3 Bill Splitting
 
-[ ] Create SplitBillPage.jsx — split by person, by item, or custom
-[ ] Add split payment UI (multiple people pay separately)
-[ ] Create multiple PaymentIntents for split bills
+[x] Create SplitBillPage.jsx — split by person, by item, or custom
+[x] Add split payment UI (multiple people pay separately)
+[x] Create multiple PaymentIntents for split bills
 [ ] Add split payment tracking in Order model
 [ ] Test split payment flow end-to-end
 

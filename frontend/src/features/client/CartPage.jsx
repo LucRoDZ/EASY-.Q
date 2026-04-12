@@ -1,5 +1,5 @@
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag } from 'lucide-react';
+import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag, SplitSquareHorizontal } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { t } from '../../localization/translations';
 
@@ -138,6 +138,20 @@ export default function CartPage() {
                 className="w-full bg-black text-white py-4 rounded-full font-semibold text-lg hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {t(lang, 'pay')} · {formatPrice(total, currency)}
+              </button>
+
+              <button
+                disabled={total < 5}
+                onClick={() => {
+                  const tableParam = searchParams.get('table');
+                  const params = new URLSearchParams({ lang, currency });
+                  if (tableParam) params.set('table', tableParam);
+                  navigate(`/menu/${slug}/split?${params}`);
+                }}
+                className="w-full flex items-center justify-center gap-2 mt-2 bg-white text-neutral-700 border border-neutral-200 py-3 rounded-full font-medium hover:bg-neutral-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+              >
+                <SplitSquareHorizontal size={16} />
+                {lang === 'fr' ? 'Partager l\'addition' : lang === 'es' ? 'Dividir la cuenta' : 'Split bill'}
               </button>
 
               <div className="mt-4 pt-4 border-t border-neutral-100">

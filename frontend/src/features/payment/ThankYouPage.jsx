@@ -199,8 +199,13 @@ export default function ThankYouPage() {
           }`}
         >
           {isSuccess ? (
-            <div className="rounded-full bg-neutral-900 p-5">
-              <CheckCircle size={48} className="text-white" strokeWidth={1.5} />
+            <div className="relative">
+              {/* Pulse rings */}
+              <div className="absolute inset-0 rounded-full bg-neutral-300 animate-ping opacity-40" />
+              <div className="absolute inset-0 rounded-full bg-neutral-200 animate-pulse opacity-60" />
+              <div className="relative rounded-full bg-neutral-900 p-5 shadow-lg">
+                <CheckCircle size={48} className="text-white" strokeWidth={1.5} />
+              </div>
             </div>
           ) : (
             <div className="rounded-full bg-red-50 p-5">
