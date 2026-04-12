@@ -98,7 +98,7 @@ All infrastructure components are in place:
 - ✅ Backend: GET /api/v1/public/menu/{slug} exists
 
 [x] **Consolidate duplicate MenuPage** — move src/pages/MenuPage.jsx to src/features/client, remove duplicate
-[ ] Test menu view — sections, items, allergens, prices
+[x] Test menu view — sections, items, allergens, prices
 [x] Add CartSummaryBar sticky bottom bar
 [x] Add floating language selector (FR/EN/ES)
 [x] Add menu search/filter (vegetarian, vegan, allergen-free)
@@ -109,10 +109,10 @@ All infrastructure components are in place:
 ### 2.2 Cart & Checkout
 
 - ✅ Frontend: CartPage.jsx exists (in src/pages)
-- [ ] Backend: POST /api/v1/orders missing
+- ✅ Backend: POST /api/v1/orders exists
 
 [x] **Move CartPage** — src/pages/CartPage.jsx → src/features/client/CartPage.jsx
-[ ] Test cart — add items, modify quantities, add notes per item
+[x] Test cart — add items, modify quantities, add notes per item
 [x] Add cart persistence (localStorage + BroadcastChannel for multi-tab sync)
 [x] Display VAT breakdown (10% food, 20% alcohol)
 [x] Add cart validation (min order amount, availability check)
@@ -125,7 +125,7 @@ All infrastructure components are in place:
 - ✅ Backend: POST /api/v1/public/chat (SSE streaming) exists
 
 [x] **Consolidate duplicate ChatWidget** — keep src/features/client version, remove src/components
-[ ] Test chatbot — ask questions, get menu recommendations
+[x] Test chatbot — ask questions, get menu recommendations
 [x] Implement Redis session storage (TTL 2h)
 [x] Add chatbot context (menu + allergens + dietary preferences)
 [x] Add multi-language support (detect user language, respond in same language)
@@ -136,13 +136,13 @@ All infrastructure components are in place:
 ### 2.4 Waiter Call
 
 - ✅ Backend: POST /api/v1/public/waiter/call exists
-- [ ] Frontend: WaiterCallButton missing
+- ✅ Frontend: WaiterCallButton exists
 
 [x] Create WaiterCallButton component (FAB, bottom-right)
-[ ] Test waiter call — send call, view in dashboard
-[ ] Add call status tracking (pending, acknowledged, resolved)
-[ ] Add call history for table
-[ ] Implement Redis pub/sub for real-time notifications to restaurant dashboard
+[x] Test waiter call — send call, view in dashboard
+[x] Add call status tracking (pending, acknowledged, resolved)
+[x] Add call history for table
+[x] Implement Redis pub/sub for real-time notifications to restaurant dashboard
 
 ---
 
@@ -152,8 +152,8 @@ All infrastructure components are in place:
 
 [x] Create TipPage.jsx — preset amounts (5%, 10%, 15%, custom)
 [x] Add "No tip" option
-[ ] Store tip_amount in Payment model
-[ ] Update cart total calculation to include tip
+[x] Store tip_amount in Payment model
+[x] Update cart total calculation to include tip
 
 ### 3.2 Checkout Flow
 
