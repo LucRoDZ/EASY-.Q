@@ -13,7 +13,9 @@ from app.schemas import (
     ChatResponse,
     ConversationResponse,
     WaiterCallRequest,
+    FeedbackRequest,
 )
+from app.models import AuditLog
 from app.services.menu_service import (
     get_menu_by_slug,
     get_menu_data,
@@ -197,6 +199,34 @@ def chat_with_menu_stream(
             "Connection": "keep-alive",
         },
     )
+
+
+@router.post("/menus/{slug}/feedback")
+def submit_feedback(slug: str, body: FeedbackRequest, db: Session = Depends(get_db)):
+    """Store NPS feedback in AuditLog. Best-effort — never fails the client."""
+    if body.nps_score < 1 or body.nps_score > 10:
+        raise HTTPException(status_code=400, detail="nps_score must be between 1 and 10")
+
+    log = AuditLog(
+        actor_type="client",
+        actor_id=None,
+        action="feedback.nps",
+        resource_type="menu",
+        resource_id=slug,
+        payload={
+            "nps_score": body.nps_score,
+            "comment": body.comment,
+            "payment_intent_id": body.payment_intent_id,
+            "lang": body.lang,
+        },
+    )
+    try:
+        db.add(log)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return {"status": "ok"}
 
 
 @router.post("/menus/{slug}/call-waiter")

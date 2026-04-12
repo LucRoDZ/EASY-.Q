@@ -294,6 +294,18 @@ class WaiterCallRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Feedback / NPS schemas
+# ---------------------------------------------------------------------------
+
+class FeedbackRequest(BaseModel):
+    slug: str
+    nps_score: int              # 1–10
+    comment: Optional[str] = None
+    payment_intent_id: Optional[str] = None
+    lang: str = "fr"
+
+
+# ---------------------------------------------------------------------------
 # Payment schemas
 # ---------------------------------------------------------------------------
 

@@ -328,6 +328,16 @@ export const api = {
     });
   },
 
+  async submitFeedback({ slug, nps_score, comment, payment_intent_id, lang }) {
+    const res = await fetch(`${API_BASE}/api/public/menus/${slug}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, nps_score, comment, payment_intent_id, lang }),
+    });
+    if (!res.ok) throw new Error('Feedback submission failed');
+    return res.json();
+  },
+
   // Generic helpers used by TranslatorPage and others
   async get(url) {
     const res = await fetch(`${API_BASE}${url}`);

@@ -160,11 +160,11 @@ All infrastructure components are in place:
 - ✅ Frontend: CheckoutPage.jsx exists
 - ✅ Backend: POST /api/v1/payments/create-intent exists
 
-[ ] Test checkout — Stripe Elements, card payment
-[ ] Add Apple Pay / Google Pay support
-[ ] Add payment loading states and error handling
+[x] Test checkout — Stripe Elements, card payment
+[x] Add Apple Pay / Google Pay support
+[x] Add payment loading states and error handling
 [ ] Add payment confirmation animation
-[ ] Implement Stripe webhook handler (/api/v1/payments/webhook)
+[x] Implement Stripe webhook handler (/api/v1/payments/webhook)
 [ ] Add payment receipt email (Resend)
 [ ] Add payment receipt PDF generation
 
@@ -178,11 +178,11 @@ All infrastructure components are in place:
 
 ### 3.4 Thank You & Review
 
-[ ] Create ThankYouPage.jsx — payment success, NPS survey
-[ ] Add NPS question (1-10 scale: "Would you recommend this restaurant?")
-[ ] Add optional open-ended feedback textarea
-[ ] Store feedback in AuditLog or new Feedback model
-[ ] Add Google review link (if rating >= 9)
+[x] Create ThankYouPage.jsx — payment success, NPS survey
+[x] Add NPS question (1-10 scale: "Would you recommend this restaurant?")
+[x] Add optional open-ended feedback textarea
+[x] Store feedback in AuditLog or new Feedback model
+[x] Add Google review link (if rating >= 9)
 [ ] Send email to restaurant if NPS < 7
 [ ] Add review analytics to restaurant dashboard
 
