@@ -387,3 +387,137 @@ def test_submit_feedback_unknown_menu_still_succeeds(client):
     )
     # No menu check on feedback endpoint — returns ok
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/payments/intent — split bill
+# ---------------------------------------------------------------------------
+
+def test_create_split_payment_per_person_amount(client, monkeypatch):
+    """3-way split: each person pays total/3 (integer division)."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+
+    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
+        resp = client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "split-test",
+                "items": [{"name": "Steak", "price": 30.0, "quantity": 1}],
+                "tip_amount": 0,
+                "currency": "eur",
+                "table_token": None,
+                "split_persons": 3,
+                "split_index": 0,
+            },
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["amount"] == 1000        # 3000 / 3 = 1000 cents
+    assert body["split_total"] == 3000   # total for the table
+    assert body["split_persons"] == 3
+
+
+def test_create_split_payment_last_person_pays_remainder(client, monkeypatch):
+    """Last person (split_index >= split_persons) pays the remainder."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+
+    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
+        # 30.01 EUR total = 3001 cents; 3 persons → 1000, 1000, 1001
+        resp = client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "split-remainder",
+                "items": [{"name": "Wine", "price": 30.01, "quantity": 1}],
+                "tip_amount": 0,
+                "currency": "eur",
+                "table_token": None,
+                "split_persons": 3,
+                "split_index": 3,  # index >= persons → last person
+            },
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["split_total"] == 3001
+    assert body["amount"] == 1001  # 3001 - 2 * 1000 = 1001 (remainder)
+
+
+def test_create_split_payment_stored_in_db(client, monkeypatch, test_db):
+    """Split bill fields (split_count, split_index, split_total) are persisted."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+
+    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
+        client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "split-db-test",
+                "items": [{"name": "Pasta", "price": 14.0, "quantity": 2}],
+                "tip_amount": 0,
+                "currency": "eur",
+                "table_token": "tok_table_1",
+                "split_persons": 2,
+                "split_index": 0,
+            },
+        )
+
+    session = test_db()
+    payment = session.query(Payment).filter(Payment.payment_intent_id == "pi_test_123").first()
+    session.close()
+
+    assert payment is not None
+    assert payment.split_count == 2
+    assert payment.split_index == 0
+    assert payment.split_total == 2800   # 2 × 14 = 28.00 EUR = 2800 cents
+    assert payment.amount == 1400        # 2800 / 2 = 1400 cents per person
+
+
+def test_create_split_payment_no_split_total_when_single(client, monkeypatch, test_db):
+    """When split_persons=1 (default), split_total is None in DB."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+
+    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
+        client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "no-split",
+                "items": [{"name": "Burger", "price": 12.0, "quantity": 1}],
+                "tip_amount": 0,
+                "currency": "eur",
+                "table_token": None,
+            },
+        )
+
+    session = test_db()
+    payment = session.query(Payment).filter(Payment.payment_intent_id == "pi_test_123").first()
+    session.close()
+
+    assert payment.split_count == 1
+    assert payment.split_total is None
+    assert payment.amount == 1200
+
+
+def test_split_payment_response_includes_split_fields(client, monkeypatch):
+    """Response includes split_total and split_persons when splitting."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+
+    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
+        resp = client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "split-response-test",
+                "items": [{"name": "Salmon", "price": 24.0, "quantity": 1}],
+                "tip_amount": 2.0,
+                "currency": "eur",
+                "table_token": None,
+                "split_persons": 2,
+                "split_index": 0,
+            },
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    # Total = 24 + 2 tip = 26 EUR = 2600 cents; split 2 → 1300 each
+    assert body["split_total"] == 2600
+    assert body["split_persons"] == 2
+    assert body["amount"] == 1300

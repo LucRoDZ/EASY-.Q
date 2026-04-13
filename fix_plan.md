@@ -174,7 +174,7 @@ All infrastructure components are in place:
 [x] Add split payment UI (multiple people pay separately)
 [x] Create multiple PaymentIntents for split bills
 [x] Add split payment tracking in Order model
-[ ] Test split payment flow end-to-end
+[x] Test split payment flow end-to-end
 
 ### 3.4 Thank You & Review
 
@@ -184,7 +184,7 @@ All infrastructure components are in place:
 [x] Store feedback in AuditLog or new Feedback model
 [x] Add Google review link (if rating >= 9)
 [x] Send email to restaurant if NPS < 7
-[ ] Add review analytics to restaurant dashboard
+[x] Add review analytics to restaurant dashboard
 
 ---
 
@@ -192,38 +192,38 @@ All infrastructure components are in place:
 
 ### 4.1 Order Placement via Chatbot
 
-[ ] Add Gemini function calling for "place_order"
-[ ] Create Order and OrderItem models
-[ ] Create POST /api/v1/orders endpoint (from chatbot function call)
-[ ] Add order confirmation message in chat
-[ ] Add order notification to kitchen (Redis pub/sub)
+[x] Add Gemini function calling for "place_order"
+[x] Create Order and OrderItem models
+[x] Create POST /api/v1/orders endpoint (from chatbot function call)
+[x] Add order confirmation message in chat
+[x] Add order notification to kitchen (Redis pub/sub)
 
 ### 4.2 Kitchen Display System (KDS)
 
-[ ] Create KitchenScreen.jsx — WebSocket real-time orders
-[ ] Add KDS auth (simple token, not Clerk)
-[ ] Create WebSocket endpoint /api/v1/ws/kds/{restaurant_id}
-[ ] Implement KDSConnectionManager for WebSocket connections
-[ ] Add Kanban columns: Pending → In Progress → Ready → Completed
-[ ] Add order timer (highlight red if > 15min)
-[ ] Add sound alert for new orders
-[ ] Add order status updates (click to move between columns)
-[ ] Add auto-reconnect for WebSocket failures
+[x] Create KitchenScreen.jsx — WebSocket real-time orders
+[x] Add KDS auth (simple token, not Clerk)
+[x] Create WebSocket endpoint /api/v1/ws/kds/{restaurant_id}
+[x] Implement KDSConnectionManager for WebSocket connections
+[x] Add Kanban columns: Pending → In Progress → Ready → Completed
+[x] Add order timer (highlight red if > 15min)
+[x] Add sound alert for new orders
+[x] Add order status updates (click to move between columns)
+[x] Add auto-reconnect for WebSocket failures
 [ ] Test KDS with multiple concurrent orders
 
 ### 4.3 Order Modification Window
 
-[ ] Add 2-minute edit window for orders (status: "pending")
-[ ] After 2min, lock order (status: "confirmed")
-[ ] Add PATCH /api/v1/orders/{id} — only if status == "pending"
-[ ] Return 409 Conflict if order locked
+[x] Add 2-minute edit window for orders (status: "pending")
+[x] After 2min, lock order (status: "confirmed")
+[x] Add PATCH /api/v1/orders/{id} — only if status == "pending"
+[x] Return 409 Conflict if order locked
 [ ] Show countdown timer in client UI
 
 ### 4.4 Scan & Go Mode
 
-[ ] Add support for orders without table_id (takeout/pickup)
-[ ] Generate pickup number (incremental counter per day per restaurant)
-[ ] Add separate KDS column for takeout orders
+[x] Add support for orders without table_id (takeout/pickup)
+[x] Generate pickup number (incremental counter per day per restaurant)
+[x] Add separate KDS column for takeout orders
 [ ] Add pickup number display in ThankYouPage
 [ ] Test Scan & Go flow — QR scan → order → pay → pickup number
 

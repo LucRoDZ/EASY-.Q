@@ -1,9 +1,57 @@
 import json
+import logging
 from typing import Generator
 from google import genai
+from google.genai import types
 from app.config import GOOGLE_API_KEY
 
+logger = logging.getLogger(__name__)
+
 MODEL = "gemini-2.5-flash"
+
+# ---------------------------------------------------------------------------
+# place_order function declaration for Gemini function calling
+# ---------------------------------------------------------------------------
+
+PLACE_ORDER_TOOL = types.Tool(
+    function_declarations=[
+        types.FunctionDeclaration(
+            name="place_order",
+            description=(
+                "Submit a food/drink order to the kitchen. "
+                "Call this when the customer confirms they want to order specific items."
+            ),
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "items": types.Schema(
+                        type="ARRAY",
+                        description="List of items being ordered",
+                        items=types.Schema(
+                            type="OBJECT",
+                            properties={
+                                "name": types.Schema(
+                                    type="STRING",
+                                    description="Exact dish name from the menu",
+                                ),
+                                "quantity": types.Schema(
+                                    type="INTEGER",
+                                    description="Number of portions",
+                                ),
+                                "notes": types.Schema(
+                                    type="STRING",
+                                    description="Special instructions (e.g. sans oignons)",
+                                ),
+                            },
+                            required=["name", "quantity"],
+                        ),
+                    ),
+                },
+                required=["items"],
+            ),
+        )
+    ]
+)
 
 LANG_NAMES = {"en": "English", "fr": "French", "es": "Spanish"}
 
@@ -45,6 +93,7 @@ Your role:
 - Help customers choose dishes based on their preferences
 - Recommend wines that pair well with their choices
 - Answer questions about ingredients, allergens, and dietary restrictions
+- Take food orders when customers are ready to order
 - Be warm, helpful, and concise
 
 Dietary & allergen context:
@@ -59,6 +108,7 @@ Rules:
 - When mentioning dish names, wrap them in **bold** markdown
 - When a dish has allergens, always mention the key ones proactively
 - For dietary questions (vegetarian, vegan, gluten-free), list all qualifying dishes
+- When a customer confirms they want to order (e.g. "je voudrais commander", "I'll have", "order"), use the place_order function
 
 Menu data (your source of truth):
 {json.dumps(menu_data, ensure_ascii=False)}
@@ -89,6 +139,59 @@ def chat_about_menu(menu_data: dict, lang: str, messages: list[dict]) -> str:
         contents=all_contents,
     )
     return response.text or ""
+
+
+def chat_about_menu_with_order(
+    menu_data: dict,
+    lang: str,
+    messages: list[dict],
+) -> tuple[str, dict | None]:
+    """Non-streaming chat with place_order function calling support.
+
+    Returns:
+        (answer_text, order_items) where order_items is None if no order was placed,
+        or a dict like {"items": [{"name": ..., "quantity": ..., "notes": ...}]}
+        when Gemini calls place_order.
+    """
+    client = genai.Client(api_key=GOOGLE_API_KEY)
+    _, all_contents = build_chat_contents(menu_data, lang, messages)
+
+    try:
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=all_contents,
+            config=types.GenerateContentConfig(tools=[PLACE_ORDER_TOOL]),
+        )
+    except Exception as e:
+        logger.warning("Function calling failed, falling back to plain chat: %s", e)
+        return chat_about_menu(menu_data, lang, messages), None
+
+    # Check if Gemini wants to call place_order
+    candidate = response.candidates[0] if response.candidates else None
+    if not candidate:
+        return response.text or "", None
+
+    for part in candidate.content.parts:
+        if hasattr(part, "function_call") and part.function_call:
+            fc = part.function_call
+            if fc.name == "place_order":
+                order_data = dict(fc.args) if fc.args else {}
+                # Build a confirmation message by sending function_response back
+                lang_name = LANG_NAMES.get(lang, "English")
+                items = order_data.get("items", [])
+                item_names = ", ".join(
+                    f"{i.get('quantity', 1)}× {i.get('name', '')}" for i in items
+                )
+                confirmation_msgs = {
+                    "fr": f"Votre commande a bien été envoyée en cuisine : {item_names}. Elle sera prête dans quelques instants !",
+                    "en": f"Your order has been sent to the kitchen: {item_names}. It will be ready shortly!",
+                    "es": f"Tu pedido ha sido enviado a la cocina: {item_names}. ¡Estará listo en breve!",
+                }
+                confirmation = confirmation_msgs.get(lang, confirmation_msgs["en"])
+                return confirmation, order_data
+
+    # No function call — return plain text
+    return response.text or "", None
 
 
 def chat_about_menu_stream(

@@ -12,6 +12,7 @@ from app.routers.restaurants import router as restaurants_router
 from app.routers.payments import router as payments_router
 from app.routers.health import router as health_router
 from app.routers.orders import router as orders_router
+from app.routers.kds import router as kds_router
 from app.services.file_service import ensure_dirs
 from app.config import STORAGE_DIR, CORS_ORIGINS, FRONTEND_URL
 from app.core import redis as redis_core
@@ -53,6 +54,7 @@ app.include_router(dashboard.router)
 app.include_router(payments_router)
 app.include_router(health_router)
 app.include_router(orders_router)
+app.include_router(kds_router)
 
 
 @app.get("/")

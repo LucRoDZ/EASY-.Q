@@ -33,3 +33,6 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 # CORS and Frontend
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+# KDS (Kitchen Display System) — simple token auth, not Clerk
+KDS_SECRET_TOKEN = os.getenv("KDS_SECRET_TOKEN", "kds-dev-token-change-in-production")

@@ -122,6 +122,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    order_id: Optional[int] = None  # Set when Gemini places an order via function calling
 
 
 class ConversationResponse(BaseModel):
@@ -371,6 +372,8 @@ class OrderResponse(BaseModel):
     status: str
     notes: Optional[str] = None
     created_at: str
+    seconds_remaining: Optional[int] = None  # seconds left in 2-min edit window (None if locked)
+    pickup_number: Optional[int] = None       # for Scan & Go takeout orders
 
     class Config:
         from_attributes = True

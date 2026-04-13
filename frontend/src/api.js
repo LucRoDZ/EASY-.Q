@@ -245,6 +245,12 @@ export const api = {
     return res.json();
   },
 
+  async getReviewAnalytics(slug) {
+    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/analytics/reviews`);
+    if (!res.ok) throw new Error('Failed to load review analytics');
+    return res.json();
+  },
+
   // Restaurant profile
   async getRestaurantProfile(slug) {
     const res = await fetch(`${API_BASE}/api/v1/restaurants/${slug}`);

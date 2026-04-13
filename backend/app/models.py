@@ -132,8 +132,9 @@ class Order(Base):
     items = Column(JSON, nullable=False, default=list)   # [{name, price, quantity}]
     total = Column(Integer, nullable=False, default=0)   # in cents
     currency = Column(String(10), nullable=False, default="eur")
-    status = Column(String(20), nullable=False, default="pending")  # pending|confirmed|ready|done
+    status = Column(String(20), nullable=False, default="pending")  # pending|confirmed|in_progress|ready|done|cancelled
     notes = Column(Text, nullable=True)
+    pickup_number = Column(Integer, nullable=True)  # Scan & Go: daily incremental counter
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

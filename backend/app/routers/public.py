@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.models import Table
 from app.schemas import (
     PublicMenuResponse,
     ChatRequest,
@@ -15,13 +14,18 @@ from app.schemas import (
     WaiterCallRequest,
     FeedbackRequest,
 )
-from app.models import AuditLog, RestaurantProfile
+from app.models import AuditLog, Order, RestaurantProfile, Table
 from app.services.menu_service import (
     get_menu_by_slug,
     get_menu_data,
     get_full_menu_data,
 )
-from app.services.chat_service import chat_about_menu, chat_about_menu_stream, MODEL
+from app.services.chat_service import (
+    chat_about_menu,
+    chat_about_menu_stream,
+    chat_about_menu_with_order,
+    MODEL,
+)
 from app.services.conversation_service import (
     get_conversation_messages,
     save_conversation_messages,
@@ -107,7 +111,53 @@ def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(get_db
         if redis_messages:
             session_messages = redis_messages
 
-    answer = chat_about_menu(full_data, lang, session_messages)
+    # Use function calling to support place_order
+    answer, order_data = chat_about_menu_with_order(full_data, lang, session_messages)
+    order_id = None
+
+    # If Gemini called place_order, create the order in DB and notify kitchen
+    if order_data and order_data.get("items"):
+        table_id = None
+        table_token = getattr(request, "table_token", None)
+        if table_token:
+            table = db.query(Table).filter(Table.qr_token == table_token).first()
+            if table:
+                table_id = table.id
+
+        items = order_data["items"]
+        total_cents = sum(
+            round((item.get("price", 0) or 0) * 100 * item.get("quantity", 1))
+            for item in items
+        )
+
+        order = Order(
+            menu_slug=menu.slug,
+            table_id=table_id,
+            table_token=table_token,
+            items=items,
+            total=total_cents,
+            currency="eur",
+            status="pending",
+        )
+        db.add(order)
+        db.commit()
+        db.refresh(order)
+        order_id = order.id
+
+        # Broadcast new order to Redis pub/sub for KDS
+        try:
+            asyncio.run(redis_core.publish_order_event(
+                menu.slug,
+                {
+                    "type": "new_order",
+                    "order_id": order_id,
+                    "table_token": table_token,
+                    "items": items,
+                    "status": "pending",
+                },
+            ))
+        except Exception:
+            pass  # Best-effort — KDS may not be connected
 
     if request.session_id:
         trace_data = langfuse_service.trace_chat(
@@ -123,13 +173,15 @@ def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(get_db
         assistant_message = {"role": "assistant", "content": answer}
         if trace_data:
             assistant_message["trace"] = trace_data
+        if order_id:
+            assistant_message["order_id"] = order_id
 
         messages_to_save = session_messages + [assistant_message]
         # Save to Redis (primary — 2h TTL) and DB (secondary — durable)
         _redis_save_session(request.session_id, messages_to_save)
         save_conversation_messages(db, menu.id, request.session_id, messages_to_save)
 
-    return ChatResponse(answer=answer)
+    return ChatResponse(answer=answer, order_id=order_id)
 
 
 @router.post("/menus/{slug}/chat/stream")

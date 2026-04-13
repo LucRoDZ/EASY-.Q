@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.models import Menu, Table
+from app.models import AuditLog, Menu, Table
 from app.services.conversation_service import (
     list_menu_conversations,
     parse_conversation_messages,
@@ -175,3 +175,60 @@ async def get_waiter_call_history(
     except Exception:
         calls = []
     return {"calls": calls}
+
+
+@router.get("/menus/{slug}/analytics/reviews")
+def get_review_analytics(slug: str, db: Session = Depends(get_db)):
+    """Return NPS analytics for a restaurant: average, distribution, recent reviews."""
+    menu = get_menu_by_slug(db, slug)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+
+    logs = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.action == "feedback.nps",
+            AuditLog.resource_id == slug,
+        )
+        .order_by(AuditLog.created_at.desc())
+        .all()
+    )
+
+    if not logs:
+        return {
+            "total": 0,
+            "average_nps": None,
+            "nps_score": None,
+            "promoters": 0,
+            "passives": 0,
+            "detractors": 0,
+            "recent": [],
+        }
+
+    scores = [log.payload.get("nps_score", 0) for log in logs if log.payload]
+    total = len(scores)
+    promoters = sum(1 for s in scores if s >= 9)
+    passives = sum(1 for s in scores if 7 <= s <= 8)
+    detractors = sum(1 for s in scores if s <= 6)
+    average_nps = round(sum(scores) / total, 1) if total else None
+    nps_score = round((promoters - detractors) / total * 100, 1) if total else None
+
+    recent = [
+        {
+            "nps_score": log.payload.get("nps_score"),
+            "comment": log.payload.get("comment"),
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        }
+        for log in logs[:10]
+        if log.payload
+    ]
+
+    return {
+        "total": total,
+        "average_nps": average_nps,
+        "nps_score": nps_score,
+        "promoters": promoters,
+        "passives": passives,
+        "detractors": detractors,
+        "recent": recent,
+    }
