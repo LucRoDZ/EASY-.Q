@@ -16,6 +16,7 @@ import TipPage from './features/payment/TipPage';
 import ThankYouPage from './features/payment/ThankYouPage';
 import SplitBillPage from './features/payment/SplitBillPage';
 import KitchenScreen from './features/kds/KitchenScreen';
+import DashboardChartsPage from './features/analytics/DashboardChartsPage';
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/dashboard/:slug" element={<DashboardConversationsPage />} />
         <Route path="/kds/:slug" element={<KitchenScreen />} />
+        <Route path="/analytics" element={<DashboardChartsPage />} />
       </Routes>
     </CartProvider>
   );

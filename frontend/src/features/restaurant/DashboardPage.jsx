@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Loader2, UtensilsCrossed, QrCode, Upload, Plus,
-  ClipboardList, AlertCircle, Languages, Bell, Star,
+  ClipboardList, AlertCircle, Languages, Bell, Star, BarChart2,
 } from 'lucide-react';
 import { api } from '../../api';
 
@@ -352,6 +352,12 @@ function QuickActionsCard({ menu }) {
           icon={ClipboardList}
           label="Voir les conversations"
           sub="Historique chatbot IA"
+        />
+        <ActionTile
+          to={menu ? `/analytics?slug=${menu.slug}` : '/analytics'}
+          icon={BarChart2}
+          label="Analytiques"
+          sub="Revenus, couverts, chatbot"
         />
       </div>
     </div>

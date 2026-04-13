@@ -31,10 +31,14 @@ def _seconds_remaining(order: Order) -> int | None:
 
 
 def _auto_lock_if_expired(db: Session, order: Order) -> Order:
-    """If the order is pending and > 2 minutes old, auto-lock to 'confirmed'."""
-    if order.status == "pending":
+    """If the order is pending and > 2 minutes old, auto-lock to 'confirmed'.
+
+    _seconds_remaining returns None when the window has expired (or no created_at),
+    so we guard on created_at to avoid locking orders with missing timestamps.
+    """
+    if order.status == "pending" and order.created_at:
         remaining = _seconds_remaining(order)
-        if remaining is not None and remaining == 0:
+        if remaining is None:  # window has expired
             order.status = "confirmed"
             db.commit()
             db.refresh(order)

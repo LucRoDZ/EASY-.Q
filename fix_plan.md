@@ -209,7 +209,7 @@ All infrastructure components are in place:
 [x] Add sound alert for new orders
 [x] Add order status updates (click to move between columns)
 [x] Add auto-reconnect for WebSocket failures
-[ ] Test KDS with multiple concurrent orders
+[x] Test KDS with multiple concurrent orders
 
 ### 4.3 Order Modification Window
 
@@ -217,15 +217,15 @@ All infrastructure components are in place:
 [x] After 2min, lock order (status: "confirmed")
 [x] Add PATCH /api/v1/orders/{id} — only if status == "pending"
 [x] Return 409 Conflict if order locked
-[ ] Show countdown timer in client UI
+[x] Show countdown timer in client UI
 
 ### 4.4 Scan & Go Mode
 
 [x] Add support for orders without table_id (takeout/pickup)
 [x] Generate pickup number (incremental counter per day per restaurant)
 [x] Add separate KDS column for takeout orders
-[ ] Add pickup number display in ThankYouPage
-[ ] Test Scan & Go flow — QR scan → order → pay → pickup number
+[x] Add pickup number display in ThankYouPage
+[x] Test Scan & Go flow — QR scan → order → pay → pickup number
 
 ---
 
@@ -233,17 +233,17 @@ All infrastructure components are in place:
 
 ### 5.1 Restaurant Analytics
 
-[ ] Create DashboardChartsPage.jsx — revenue, covers, chatbot usage
-[ ] Add date range picker (today, week, month, custom)
-[ ] Add revenue chart (daily/weekly breakdown)
-[ ] Add covers chart (number of tables served)
-[ ] Add chatbot metrics (messages, sessions, avg duration)
-[ ] Add top items sold chart
-[ ] Add peak hours heatmap
-[ ] Backend: GET /api/v1/analytics/revenue
-[ ] Backend: GET /api/v1/analytics/covers
-[ ] Backend: GET /api/v1/analytics/chatbot
-[ ] Backend: GET /api/v1/analytics/items
+[x] Create DashboardChartsPage.jsx — revenue, covers, chatbot usage
+[x] Add date range picker (today, week, month, custom)
+[x] Add revenue chart (daily/weekly breakdown)
+[x] Add covers chart (number of tables served)
+[x] Add chatbot metrics (messages, sessions, avg duration)
+[x] Add top items sold chart
+[x] Add peak hours heatmap
+[x] Backend: GET /api/v1/analytics/revenue
+[x] Backend: GET /api/v1/analytics/covers
+[x] Backend: GET /api/v1/analytics/chatbot
+[x] Backend: GET /api/v1/analytics/items
 
 ### 5.2 Conversations Dashboard
 
