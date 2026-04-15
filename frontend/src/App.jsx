@@ -17,6 +17,9 @@ import ThankYouPage from './features/payment/ThankYouPage';
 import SplitBillPage from './features/payment/SplitBillPage';
 import KitchenScreen from './features/kds/KitchenScreen';
 import DashboardChartsPage from './features/analytics/DashboardChartsPage';
+import AdminDashboardPage from './features/admin/AdminDashboardPage';
+import UpgradePage from './features/payment/UpgradePage';
+import OnboardingPage from './features/restaurant/OnboardingPage';
 
 export default function App() {
   return (
@@ -39,6 +42,9 @@ export default function App() {
         <Route path="/dashboard/:slug" element={<DashboardConversationsPage />} />
         <Route path="/kds/:slug" element={<KitchenScreen />} />
         <Route path="/analytics" element={<DashboardChartsPage />} />
+        <Route path="/admin" element={<AdminDashboardPage />} />
+        <Route path="/upgrade" element={<UpgradePage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
       </Routes>
     </CartProvider>
   );

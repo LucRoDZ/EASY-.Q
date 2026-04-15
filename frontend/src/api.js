@@ -239,15 +239,112 @@ export const api = {
     return res.json();
   },
 
+  // Admin backoffice
+  async getAdminStats() {
+    const res = await fetch(`${API_BASE}/api/v1/admin/stats`);
+    if (!res.ok) throw new Error('Failed to load admin stats');
+    return res.json();
+  },
+
+  async getAdminRestaurants(params = {}) {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    const res = await fetch(`${API_BASE}/api/v1/admin/restaurants${qs ? `?${qs}` : ''}`);
+    if (!res.ok) throw new Error('Failed to load restaurants');
+    return res.json();
+  },
+
+  async patchAdminRestaurantStatus(slug, status) {
+    const res = await fetch(`${API_BASE}/api/v1/admin/restaurants/${slug}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error('Failed to update restaurant status');
+    return res.json();
+  },
+
+  async getAdminSubscriptions(params = {}) {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    const res = await fetch(`${API_BASE}/api/v1/admin/subscriptions${qs ? `?${qs}` : ''}`);
+    if (!res.ok) throw new Error('Failed to load subscriptions');
+    return res.json();
+  },
+
+  async getAdminAuditLogs({ action, resource_type, resource_id, limit = 50, offset = 0 } = {}) {
+    const params = new URLSearchParams();
+    if (action) params.set('action', action);
+    if (resource_type) params.set('resource_type', resource_type);
+    if (resource_id) params.set('resource_id', resource_id);
+    params.set('limit', limit);
+    params.set('offset', offset);
+    const res = await fetch(`${API_BASE}/api/v1/admin/audit-logs?${params}`);
+    if (!res.ok) throw new Error('Failed to load audit logs');
+    return res.json();
+  },
+
   async getDashboardConversations(slug) {
     const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/conversations`);
     if (!res.ok) throw new Error('Failed to load conversations');
     return res.json();
   },
 
+  // Subscriptions
+  async getSubscription(restaurantId) {
+    const res = await fetch(`${API_BASE}/api/v1/subscriptions/${encodeURIComponent(restaurantId)}`);
+    if (!res.ok) throw new Error('Failed to load subscription');
+    return res.json();
+  },
+
+  async createSubscriptionCheckout(restaurantId, customerEmail = '') {
+    const res = await fetch(`${API_BASE}/api/v1/subscriptions/create-checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restaurant_id: restaurantId, customer_email: customerEmail }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Checkout failed');
+    }
+    return res.json();
+  },
+
+  async createSubscriptionPortal(restaurantId) {
+    const res = await fetch(`${API_BASE}/api/v1/subscriptions/portal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restaurant_id: restaurantId }),
+    });
+    if (!res.ok) throw new Error('Failed to create portal session');
+    return res.json();
+  },
+
   async getReviewAnalytics(slug) {
     const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/analytics/reviews`);
     if (!res.ok) throw new Error('Failed to load review analytics');
+    return res.json();
+  },
+
+  async getAnalyticsSummary(slug, period = '7d') {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/summary?slug=${encodeURIComponent(slug)}&period=${period}`);
+    if (!res.ok) throw new Error('Failed to load analytics summary');
+    return res.json();
+  },
+
+  async getAnalyticsRevenue(slug, period = '7d') {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/revenue?slug=${encodeURIComponent(slug)}&period=${period}`);
+    if (!res.ok) throw new Error('Failed to load revenue analytics');
+    return res.json();
+  },
+
+  async getAnalyticsChatbot(slug, period = '7d') {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/chatbot?slug=${encodeURIComponent(slug)}&period=${period}`);
+    if (!res.ok) throw new Error('Failed to load chatbot analytics');
+    return res.json();
+  },
+
+  async getAnalyticsItems(slug, period = '7d') {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/items?slug=${encodeURIComponent(slug)}&period=${period}`);
+    if (!res.ok) throw new Error('Failed to load items analytics');
     return res.json();
   },
 
@@ -343,6 +440,42 @@ export const api = {
       body: JSON.stringify({ slug, nps_score, comment, payment_intent_id, lang }),
     });
     if (!res.ok) throw new Error('Feedback submission failed');
+    return res.json();
+  },
+
+  // Admin backoffice
+  async adminStats(token) {
+    const res = await fetch(`${API_BASE}/api/v1/admin/stats`, {
+      headers: { 'X-Admin-Token': token },
+    });
+    if (!res.ok) throw new Error(`Admin stats failed (${res.status})`);
+    return res.json();
+  },
+
+  async adminRestaurants(token, params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const res = await fetch(`${API_BASE}/api/v1/admin/restaurants${qs ? `?${qs}` : ''}`, {
+      headers: { 'X-Admin-Token': token },
+    });
+    if (!res.ok) throw new Error(`Admin restaurants failed (${res.status})`);
+    return res.json();
+  },
+
+  async adminSubscriptions(token, params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const res = await fetch(`${API_BASE}/api/v1/admin/subscriptions${qs ? `?${qs}` : ''}`, {
+      headers: { 'X-Admin-Token': token },
+    });
+    if (!res.ok) throw new Error(`Admin subscriptions failed (${res.status})`);
+    return res.json();
+  },
+
+  async adminAuditLogs(token, params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const res = await fetch(`${API_BASE}/api/v1/admin/audit-logs${qs ? `?${qs}` : ''}`, {
+      headers: { 'X-Admin-Token': token },
+    });
+    if (!res.ok) throw new Error(`Admin audit logs failed (${res.status})`);
     return res.json();
   },
 

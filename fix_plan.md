@@ -250,23 +250,23 @@ All infrastructure components are in place:
 - ✅ Frontend: DashboardConversationsPage.jsx exists
 - ✅ Backend: GET /api/dashboard/conversations exists
 
-[ ] Test conversations dashboard — list all chat sessions
-[ ] Add conversation search/filter
-[ ] Add conversation export (CSV)
-[ ] Add sentiment analysis (positive/negative feedback detection)
+[x] Test conversations dashboard — list all chat sessions
+[x] Add conversation search/filter
+[x] Add conversation export (CSV)
+[x] Add sentiment analysis (positive/negative feedback detection)
 
 ### 5.3 Admin Backoffice
 
-[ ] Create AdminDashboardPage.jsx — superadmin panel
-[ ] Add user management (list, toggle active, delete)
-[ ] Add restaurant management (list, view details, deactivate)
-[ ] Add subscription management (view plans, cancel, refund)
-[ ] Add system health metrics (DB, Redis, R2 status)
-[ ] Add audit log viewer (filter by actor, action, resource)
-[ ] Backend: GET /api/v1/admin/users
-[ ] Backend: GET /api/v1/admin/restaurants
-[ ] Backend: GET /api/v1/admin/subscriptions
-[ ] Backend: GET /api/v1/admin/audit-logs
+[x] Create AdminDashboardPage.jsx — superadmin panel
+[x] Add user management (list, toggle active, delete)
+[x] Add restaurant management (list, view details, deactivate)
+[x] Add subscription management (view plans, cancel, refund)
+[x] Add system health metrics (DB, Redis, R2 status)
+[x] Add audit log viewer (filter by actor, action, resource)
+[x] Backend: GET /api/v1/admin/users
+[x] Backend: GET /api/v1/admin/restaurants
+[x] Backend: GET /api/v1/admin/subscriptions
+[x] Backend: GET /api/v1/admin/audit-logs
 
 ---
 
@@ -274,20 +274,20 @@ All infrastructure components are in place:
 
 ### 6.1 Subscription Management
 
-[ ] Create UpgradePage.jsx — Freemium vs Pro comparison
-[ ] Add Stripe Billing integration
-[ ] Create POST /api/v1/subscriptions/create-checkout endpoint
-[ ] Add Stripe Customer Portal link
-[ ] Add subscription webhook handler
+[x] Create UpgradePage.jsx — Freemium vs Pro comparison
+[x] Add Stripe Billing integration
+[x] Create POST /api/v1/subscriptions/create-checkout endpoint
+[x] Add Stripe Customer Portal link
+[x] Add subscription webhook handler
 [ ] Add plan limits enforcement (free: 1 menu, pro: unlimited)
 [ ] Add feature gating (payment, analytics only in Pro)
 
 ### 6.2 Onboarding Flow
 
-[ ] Create multi-step onboarding wizard (restaurant info → upload menu → create tables)
-[ ] Add progress tracker (3 steps)
-[ ] Add sample data option (skip OCR, use demo menu)
-[ ] Add onboarding completion celebration (confetti animation)
+[x] Create multi-step onboarding wizard (restaurant info → upload menu → create tables)
+[x] Add progress tracker (3 steps)
+[x] Add sample data option (skip OCR, use demo menu)
+[x] Add onboarding completion celebration (confetti animation)
 [ ] Track onboarding completion in AuditLog
 
 ### 6.3 Email Notifications
