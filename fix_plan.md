@@ -316,10 +316,10 @@ All infrastructure components are in place:
 
 ### 7.2 Frontend Tests
 
-[ ] Add Vitest + React Testing Library tests
-[ ] Test MenuPage rendering and interaction
-[ ] Test CartContext add/remove/update
-[ ] Test ChatWidget streaming and session management
+[x] Add Vitest + React Testing Library tests
+[x] Test MenuPage rendering and interaction
+[x] Test CartContext add/remove/update
+[x] Test ChatWidget streaming and session management
 [ ] Test payment form validation
 [ ] Test KDS WebSocket reconnection
 [ ] Add Playwright E2E tests (critical paths)
@@ -336,13 +336,13 @@ All infrastructure components are in place:
 [x] Optimize menu query with DB indexes
 [ ] Add lazy loading for menu images
 [ ] Add image CDN (Cloudflare or Cloudinary)
-[ ] Optimize bundle size (code splitting, tree shaking)
+[x] Optimize bundle size (code splitting, tree shaking)
 [ ] Add Lighthouse CI to check PWA score (target: 90+)
 
 ### 8.2 Monitoring & Logging
 
 [x] Set up Sentry for error tracking (backend + frontend)
-[ ] Add PostHog for product analytics (RGPD compliant)
+[x] Add PostHog for product analytics (RGPD compliant)
 [x] Add structured logging (JSON format, log levels)
 [x] Add request ID tracing (X-Request-ID header)
 [x] Add slow query logging (> 100ms)
