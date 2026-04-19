@@ -305,13 +305,13 @@ All infrastructure components are in place:
 
 ### 7.1 Backend Tests
 
-[ ] Add pytest fixtures for DB, Redis, mocked Gemini API
-[ ] Test auth endpoints (Clerk webhook, /me)
-[ ] Test menu endpoints (upload, OCR, edit, translate)
-[ ] Test table endpoints (create, list, QR generation)
-[ ] Test payment endpoints (create intent, webhook)
-[ ] Test chat endpoints (SSE streaming, session storage)
-[ ] Test KDS WebSocket connections
+[x] Add pytest fixtures for DB, Redis, mocked Gemini API
+[x] Test auth endpoints (Clerk webhook, /me)
+[x] Test menu endpoints (upload, OCR, edit, translate)
+[x] Test table endpoints (create, list, QR generation)
+[x] Test payment endpoints (create intent, webhook)
+[x] Test chat endpoints (SSE streaming, session storage)
+[x] Test KDS WebSocket connections
 [ ] Achieve 80%+ backend code coverage
 
 ### 7.2 Frontend Tests
@@ -331,9 +331,9 @@ All infrastructure components are in place:
 
 ### 8.1 Performance Optimization
 
-[ ] Add Redis caching for menu queries (5min TTL)
-[ ] Add Redis caching for OCR results (24h TTL)
-[ ] Optimize menu query with DB indexes
+[x] Add Redis caching for menu queries (5min TTL)
+[x] Add Redis caching for OCR results (24h TTL)
+[x] Optimize menu query with DB indexes
 [ ] Add lazy loading for menu images
 [ ] Add image CDN (Cloudflare or Cloudinary)
 [ ] Optimize bundle size (code splitting, tree shaking)
@@ -341,11 +341,11 @@ All infrastructure components are in place:
 
 ### 8.2 Monitoring & Logging
 
-[ ] Set up Sentry for error tracking (backend + frontend)
+[x] Set up Sentry for error tracking (backend + frontend)
 [ ] Add PostHog for product analytics (RGPD compliant)
-[ ] Add structured logging (JSON format, log levels)
-[ ] Add request ID tracing (X-Request-ID header)
-[ ] Add slow query logging (> 100ms)
+[x] Add structured logging (JSON format, log levels)
+[x] Add request ID tracing (X-Request-ID header)
+[x] Add slow query logging (> 100ms)
 [ ] Add uptime monitoring (UptimeRobot or similar)
 [ ] Add performance monitoring (APM)
 
