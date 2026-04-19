@@ -14,10 +14,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from PIL import Image
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel
+
 from app.config import BASE_URL, STORAGE_DIR
 from app.core import storage as r2
 from app.db import get_db
-from app.models import Menu, RestaurantProfile
+from app.models import AuditLog, Menu, RestaurantProfile
 from app.schemas import LogoUploadResponse, RestaurantProfileResponse, RestaurantProfileUpdate
 
 router = APIRouter(prefix="/api/v1/restaurants", tags=["restaurants"])
@@ -188,3 +190,49 @@ async def upload_logo(
     db.commit()
 
     return LogoUploadResponse(logo_url=logo_url)
+
+
+# ---------------------------------------------------------------------------
+# POST /onboarding/complete
+# ---------------------------------------------------------------------------
+
+class OnboardingCompleteBody(BaseModel):
+    restaurant_name: str
+    slug: str | None = None
+    tables_created: int = 0
+    menu_uploaded: bool = False
+    demo: bool = False
+    owner_email: str | None = None
+
+
+@router.post("/onboarding/complete")
+def complete_onboarding(
+    body: OnboardingCompleteBody,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Record onboarding completion in AuditLog and optionally send welcome email."""
+    log = AuditLog(
+        actor_type="user",
+        actor_id=body.slug or body.restaurant_name,
+        action="onboarding.complete",
+        resource_type="restaurant",
+        resource_id=body.slug or body.restaurant_name,
+        payload={
+            "restaurant_name": body.restaurant_name,
+            "tables_created": body.tables_created,
+            "menu_uploaded": body.menu_uploaded,
+            "demo": body.demo,
+        },
+    )
+    db.add(log)
+    db.commit()
+
+    # Send welcome email if owner_email is provided
+    if body.owner_email:
+        from app.services.email_service import send_welcome_email
+        try:
+            send_welcome_email(to=body.owner_email, restaurant_name=body.restaurant_name)
+        except Exception:
+            pass  # Non-critical — don't fail onboarding if email fails
+
+    return {"ok": True}

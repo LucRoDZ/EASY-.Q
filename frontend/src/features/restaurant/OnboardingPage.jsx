@@ -381,8 +381,24 @@ export default function OnboardingPage() {
   const [data, setData] = useState({});
 
   const next = (stepData = {}) => {
-    setData((d) => ({ ...d, ...stepData }));
-    setStep((s) => s + 1);
+    const newData = { ...data, ...stepData };
+    setData(newData);
+    const nextStep = step + 1;
+    setStep(nextStep);
+
+    // On reaching the celebration step, log onboarding completion
+    if (nextStep === 4) {
+      fetch('/api/v1/restaurants/onboarding/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurant_name: newData.restaurantName || 'Restaurant',
+          tables_created: newData.tablesCreated || 0,
+          menu_uploaded: newData.menuUploaded || false,
+          demo: newData.demo || false,
+        }),
+      }).catch(() => {}); // Non-critical
+    }
   };
   const back = () => setStep((s) => Math.max(1, s - 1));
 

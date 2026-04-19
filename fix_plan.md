@@ -279,8 +279,8 @@ All infrastructure components are in place:
 [x] Create POST /api/v1/subscriptions/create-checkout endpoint
 [x] Add Stripe Customer Portal link
 [x] Add subscription webhook handler
-[ ] Add plan limits enforcement (free: 1 menu, pro: unlimited)
-[ ] Add feature gating (payment, analytics only in Pro)
+[x] Add plan limits enforcement (free: 1 menu, pro: unlimited)
+[x] Add feature gating (payment, analytics only in Pro)
 
 ### 6.2 Onboarding Flow
 
@@ -288,16 +288,16 @@ All infrastructure components are in place:
 [x] Add progress tracker (3 steps)
 [x] Add sample data option (skip OCR, use demo menu)
 [x] Add onboarding completion celebration (confetti animation)
-[ ] Track onboarding completion in AuditLog
+[x] Track onboarding completion in AuditLog
 
 ### 6.3 Email Notifications
 
-[ ] Set up Resend templates
-[ ] Add welcome email (onboarding)
-[ ] Add payment receipt email
-[ ] Add low NPS alert email (score < 7)
-[ ] Add weekly digest email (restaurant analytics summary)
-[ ] Add order confirmation email (optional)
+[x] Set up Resend templates
+[x] Add welcome email (onboarding)
+[x] Add payment receipt email
+[x] Add low NPS alert email (score < 7)
+[x] Add weekly digest email (restaurant analytics summary)
+[x] Add order confirmation email (optional)
 
 ---
 

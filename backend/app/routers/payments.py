@@ -33,6 +33,7 @@ from app.db import get_db
 from app.models import Payment, RestaurantProfile
 from app.schemas import CreatePaymentIntentRequest, PaymentIntentResponse
 from app.services.email_service import send_new_payment_email
+from app.routers.subscriptions import require_pro
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,9 @@ def create_payment_intent(
             status_code=503,
             detail="Stripe not configured — set STRIPE_SECRET_KEY",
         )
+
+    # Payments are a Pro-only feature — gate by the menu slug as restaurant_id
+    require_pro(body.slug, db)
 
     # Calculate totals server-side
     subtotal = sum(item.price * item.quantity for item in body.items)

@@ -224,6 +224,61 @@ def send_new_order_email(
     return _send(to, f"Nouvelle commande — {table}", html)
 
 
+def send_weekly_digest_email(
+    to: str,
+    restaurant_name: str,
+    week_label: str,
+    revenue: float,
+    covers: int,
+    avg_basket: float,
+    top_items: list[dict] | None = None,
+    chatbot_sessions: int = 0,
+) -> dict[str, Any] | None:
+    """Send a weekly analytics digest to the restaurant owner."""
+    top_items = top_items or []
+    items_rows = "".join(
+        f"<tr><td>{it.get('name', '?')}</td><td style='text-align:right'>{it.get('quantity', 0)}</td><td style='text-align:right'>{it.get('revenue', 0):.2f} €</td></tr>"
+        for it in top_items[:5]
+    )
+    items_table = (
+        f"""<table class="table-grid">
+  <thead><tr><th>Plat</th><th style='text-align:right'>Qté</th><th style='text-align:right'>CA</th></tr></thead>
+  <tbody>{items_rows}</tbody>
+</table>"""
+        if items_rows
+        else "<p style='color:#a3a3a3;font-size:13px;'>Aucune commande cette semaine.</p>"
+    )
+    html = _wrap(
+        header_title=f"Récap de la semaine — {restaurant_name}",
+        header_sub=week_label,
+        body_html=f"""
+<p>Voici votre bilan de la semaine <strong>{week_label}</strong>.</p>
+<div style="display:flex;gap:12px;margin:16px 0;flex-wrap:wrap;">
+  <div style="flex:1;min-width:120px;background:#f5f5f5;border-radius:10px;padding:14px;text-align:center;">
+    <div style="font-size:22px;font-weight:700;color:#171717;">{revenue:.2f} €</div>
+    <div style="font-size:11px;color:#737373;margin-top:2px;">Chiffre d'affaires</div>
+  </div>
+  <div style="flex:1;min-width:120px;background:#f5f5f5;border-radius:10px;padding:14px;text-align:center;">
+    <div style="font-size:22px;font-weight:700;color:#171717;">{covers}</div>
+    <div style="font-size:11px;color:#737373;margin-top:2px;">Couverts</div>
+  </div>
+  <div style="flex:1;min-width:120px;background:#f5f5f5;border-radius:10px;padding:14px;text-align:center;">
+    <div style="font-size:22px;font-weight:700;color:#171717;">{avg_basket:.2f} €</div>
+    <div style="font-size:11px;color:#737373;margin-top:2px;">Panier moyen</div>
+  </div>
+  <div style="flex:1;min-width:120px;background:#f5f5f5;border-radius:10px;padding:14px;text-align:center;">
+    <div style="font-size:22px;font-weight:700;color:#171717;">{chatbot_sessions}</div>
+    <div style="font-size:11px;color:#737373;margin-top:2px;">Sessions chatbot</div>
+  </div>
+</div>
+<p style="font-size:14px;font-weight:600;margin-top:20px 0 8px;">Top plats vendus</p>
+{items_table}
+<a href="https://easy-q.app/restaurant/analytics" class="btn">Voir le tableau de bord complet</a>
+""",
+    )
+    return _send(to, f"Récap semaine {week_label} — {restaurant_name}", html)
+
+
 def send_subscription_renewal_email(
     to: str,
     plan: str,

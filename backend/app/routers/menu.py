@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.core import redis as redis_core
 from app.db import SessionLocal, get_db
-from app.models import Menu
+from app.models import Menu, Subscription
 from app.schemas import (
+    BulkTranslateResponse,
     MenuCreateResponse,
     MenuDuplicateResponse,
     MenuEditorResponse,
@@ -28,6 +29,36 @@ router = APIRouter(prefix="/api/menus", tags=["menus"])
 router_v1 = APIRouter(prefix="/api/v1/menus", tags=["menus"])
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+# ---------------------------------------------------------------------------
+# Plan limits helper
+# ---------------------------------------------------------------------------
+
+def _check_menu_plan_limit(restaurant_id: str, db: Session) -> None:
+    """Raise HTTP 402 if restaurant is on free plan and already has a menu."""
+    if not restaurant_id:
+        return  # no restaurant_id → skip check (legacy/anonymous upload)
+
+    sub = db.query(Subscription).filter(
+        Subscription.restaurant_id == restaurant_id
+    ).first()
+
+    plan = sub.plan if sub else "free"
+    if plan == "pro":
+        return  # Pro = unlimited menus
+
+    # Free plan: check if a menu already exists for this restaurant_id slug
+    existing = db.query(Menu).filter(Menu.slug == restaurant_id).first()
+    if existing:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "PLAN_LIMIT_REACHED",
+                "message": "Free plan allows 1 menu. Upgrade to Pro for unlimited menus.",
+                "upgrade_url": "/upgrade",
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +170,7 @@ async def upload_menu_v1(
     background_tasks: BackgroundTasks,
     restaurant_name: str = Form(...),
     file: UploadFile = File(...),
+    restaurant_id: str | None = Form(None),
     db: Session = Depends(get_db),
 ) -> UploadMenuResponse:
     """Upload a PDF or image menu. OCR runs asynchronously.
@@ -163,6 +195,9 @@ async def upload_menu_v1(
             status_code=400,
             detail="Invalid file — PDF or image (JPEG/PNG/WebP) required",
         )
+
+    # Enforce free plan: max 1 menu per restaurant
+    _check_menu_plan_limit(restaurant_id or "", db)
 
     sha256 = hashlib.sha256(content).hexdigest()
     filename = file.filename or "menu.pdf"
@@ -250,13 +285,34 @@ def get_menu_for_editor(menu_id: int, db: Session = Depends(get_db)) -> MenuEdit
     )
 
 
+async def _translate_and_cache(
+    base_menu: dict, lang: str, content_hash: str
+) -> dict:
+    """Translate via Gemini, check Redis cache first, store result after."""
+    cached = await redis_core.get_translation_cache(content_hash, lang)
+    if cached:
+        return cached
+
+    loop = asyncio.get_event_loop()
+    translated = await loop.run_in_executor(None, translate_menu, base_menu, lang)
+    result = {
+        "sections": translated.get("sections", base_menu["sections"]),
+        "wines": translated.get("wines", base_menu["wines"]),
+    }
+    await redis_core.set_translation_cache(content_hash, lang, result)
+    return result
+
+
 @router_v1.patch("/{menu_id}/translate", response_model=TranslateResponse)
 async def translate_menu_endpoint(
     menu_id: int,
     lang: str = Query(..., description="Target language: en, fr, es"),
     db: Session = Depends(get_db),
 ) -> TranslateResponse:
-    """Auto-translate menu sections + wines to target language via Gemini. Stores result in DB."""
+    """Auto-translate menu sections + wines to target language via Gemini.
+
+    Checks Redis translation cache (7 days) before calling Gemini. Stores result in DB.
+    """
     if lang not in ("en", "fr", "es"):
         raise HTTPException(status_code=400, detail="lang must be one of: en, fr, es")
 
@@ -276,18 +332,18 @@ async def translate_menu_endpoint(
         "wines": data.get("wines", []),
     }
 
-    loop = asyncio.get_event_loop()
-    translated = await loop.run_in_executor(None, translate_menu, base_menu, lang)
+    # Stable hash of the source content for cache key
+    content_hash = hashlib.sha256(
+        json.dumps(base_menu, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()[:16]
+
+    translation = await _translate_and_cache(base_menu, lang, content_hash)
 
     translations: dict = data.get("translations", {})
-    translations[lang] = {
-        "sections": translated.get("sections", base_menu["sections"]),
-        "wines": translated.get("wines", base_menu["wines"]),
-    }
+    translations[lang] = translation
     data["translations"] = translations
     menu.menu_data = json.dumps(data, ensure_ascii=False)
 
-    # Ensure lang is recorded in the languages field
     langs = set(filter(None, menu.languages.split(","))) if menu.languages else set()
     langs.add(lang)
     langs.add("fr")
@@ -298,9 +354,62 @@ async def translate_menu_endpoint(
     return TranslateResponse(
         menu_id=menu.id,
         lang=lang,
-        sections=translations[lang]["sections"],
-        wines=translations[lang]["wines"],
+        sections=translation["sections"],
+        wines=translation["wines"],
     )
+
+
+@router_v1.post("/{menu_id}/translate/all", response_model=BulkTranslateResponse, status_code=200)
+async def bulk_translate_menu(
+    menu_id: int,
+    db: Session = Depends(get_db),
+) -> BulkTranslateResponse:
+    """Translate menu to all supported languages (en, fr, es) in one request.
+
+    Uses Redis translation cache where available. Partial failures are reported
+    in the 'errors' field without failing the whole request.
+    """
+    menu = db.query(Menu).filter(Menu.id == menu_id).first()
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+
+    data: dict = {}
+    if menu.menu_data:
+        try:
+            data = json.loads(menu.menu_data)
+        except Exception:
+            pass
+
+    base_menu = {
+        "sections": data.get("sections", []),
+        "wines": data.get("wines", []),
+    }
+    content_hash = hashlib.sha256(
+        json.dumps(base_menu, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()[:16]
+
+    translations: dict = data.get("translations", {})
+    errors: dict = {}
+
+    for lang in ("en", "fr", "es"):
+        try:
+            translation = await _translate_and_cache(base_menu, lang, content_hash)
+            translations[lang] = translation
+        except Exception as exc:
+            errors[lang] = str(exc)[:200]
+
+    data["translations"] = translations
+    menu.menu_data = json.dumps(data, ensure_ascii=False)
+
+    langs = set(filter(None, menu.languages.split(","))) if menu.languages else set()
+    langs.update(("en", "fr", "es"))
+    menu.languages = ",".join(sorted(langs))
+
+    db.commit()
+    await redis_core.invalidate_menu_cache(menu.slug)
+
+    completed = [lang for lang in ("en", "fr", "es") if lang not in errors]
+    return BulkTranslateResponse(menu_id=menu.id, languages=completed, errors=errors)
 
 
 @router_v1.patch("/{menu_id}/translations/{lang}", response_model=TranslateResponse)
