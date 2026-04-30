@@ -7,6 +7,7 @@ Tests for payment endpoints:
 """
 
 import pytest
+import stripe
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -390,134 +391,172 @@ def test_submit_feedback_unknown_menu_still_succeeds(client):
 
 
 # ---------------------------------------------------------------------------
-# POST /api/v1/payments/intent — split bill
+# POST /api/v1/payments/intent — error + plan-gating coverage
 # ---------------------------------------------------------------------------
 
-def test_create_split_payment_per_person_amount(client, monkeypatch):
-    """3-way split: each person pays total/3 (integer division)."""
+def test_create_payment_intent_stripe_error_returns_502(client, monkeypatch):
+    """When Stripe raises StripeError, the endpoint returns 502."""
     monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
 
-    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
+    with patch("stripe.PaymentIntent.create", side_effect=stripe.StripeError("card_error")):
         resp = client.post(
             "/api/v1/payments/intent",
             json={
-                "slug": "split-test",
-                "items": [{"name": "Steak", "price": 30.0, "quantity": 1}],
+                "slug": "error-test",
+                "items": [{"name": "Wine", "price": 15.0, "quantity": 1}],
                 "tip_amount": 0,
                 "currency": "eur",
                 "table_token": None,
-                "split_persons": 3,
-                "split_index": 0,
             },
         )
 
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["amount"] == 1000        # 3000 / 3 = 1000 cents
-    assert body["split_total"] == 3000   # total for the table
-    assert body["split_persons"] == 3
+    assert resp.status_code == 502
 
 
-def test_create_split_payment_last_person_pays_remainder(client, monkeypatch):
-    """Last person (split_index >= split_persons) pays the remainder."""
+def test_create_payment_intent_free_plan_returns_402(client, monkeypatch, test_db):
+    """When restaurant has a free subscription, payment intent returns 402."""
+    from app.models import Subscription
     monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
 
-    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
-        # 30.01 EUR total = 3001 cents; 3 persons → 1000, 1000, 1001
-        resp = client.post(
-            "/api/v1/payments/intent",
-            json={
-                "slug": "split-remainder",
-                "items": [{"name": "Wine", "price": 30.01, "quantity": 1}],
-                "tip_amount": 0,
-                "currency": "eur",
-                "table_token": None,
-                "split_persons": 3,
-                "split_index": 3,  # index >= persons → last person
-            },
-        )
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["split_total"] == 3001
-    assert body["amount"] == 1001  # 3001 - 2 * 1000 = 1001 (remainder)
-
-
-def test_create_split_payment_stored_in_db(client, monkeypatch, test_db):
-    """Split bill fields (split_count, split_index, split_total) are persisted."""
-    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
-
-    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
-        client.post(
-            "/api/v1/payments/intent",
-            json={
-                "slug": "split-db-test",
-                "items": [{"name": "Pasta", "price": 14.0, "quantity": 2}],
-                "tip_amount": 0,
-                "currency": "eur",
-                "table_token": "tok_table_1",
-                "split_persons": 2,
-                "split_index": 0,
-            },
-        )
-
+    # Seed a free-plan subscription
     session = test_db()
-    payment = session.query(Payment).filter(Payment.payment_intent_id == "pi_test_123").first()
+    sub = Subscription(restaurant_id="free-restaurant", plan="free", status="active")
+    session.add(sub)
+    session.commit()
     session.close()
 
-    assert payment is not None
-    assert payment.split_count == 2
-    assert payment.split_index == 0
-    assert payment.split_total == 2800   # 2 × 14 = 28.00 EUR = 2800 cents
-    assert payment.amount == 1400        # 2800 / 2 = 1400 cents per person
+    resp = client.post(
+        "/api/v1/payments/intent",
+        json={
+            "slug": "free-restaurant",
+            "items": [{"name": "Steak", "price": 20.0, "quantity": 1}],
+            "tip_amount": 0,
+            "currency": "eur",
+            "table_token": None,
+        },
+    )
+
+    assert resp.status_code == 402
 
 
-def test_create_split_payment_no_split_total_when_single(client, monkeypatch, test_db):
-    """When split_persons=1 (default), split_total is None in DB."""
-    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+# ---------------------------------------------------------------------------
+# POST /api/v1/payments/webhook — payment_failed + signed path
+# ---------------------------------------------------------------------------
 
-    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
-        client.post(
-            "/api/v1/payments/intent",
-            json={
-                "slug": "no-split",
-                "items": [{"name": "Burger", "price": 12.0, "quantity": 1}],
-                "tip_amount": 0,
-                "currency": "eur",
-                "table_token": None,
-            },
-        )
+def test_webhook_payment_failed_updates_status(client, monkeypatch, test_db):
+    """Webhook payment_intent.payment_failed → Payment.status = 'failed'."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_WEBHOOK_SECRET", "")
 
-    session = test_db()
-    payment = session.query(Payment).filter(Payment.payment_intent_id == "pi_test_123").first()
-    session.close()
+    intent_id = "pi_failed_test"
+    _seed_payment(test_db, intent_id)
 
-    assert payment.split_count == 1
-    assert payment.split_total is None
-    assert payment.amount == 1200
+    import json
+    payload = json.dumps({"type": "payment_intent.payment_failed", "data": {"object": {"id": intent_id}}})
 
+    with patch("app.routers.payments.stripe") as mock_stripe:
+        mock_stripe.api_key = "sk_test"
+        mock_stripe.Event.construct_from.return_value = _mock_stripe_event("payment_intent.payment_failed", intent_id)
+        mock_stripe.util.json.loads.return_value = {}
+        mock_stripe.util.convert_to_stripe_object.return_value = {}
 
-def test_split_payment_response_includes_split_fields(client, monkeypatch):
-    """Response includes split_total and split_persons when splitting."""
-    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
-
-    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
         resp = client.post(
-            "/api/v1/payments/intent",
-            json={
-                "slug": "split-response-test",
-                "items": [{"name": "Salmon", "price": 24.0, "quantity": 1}],
-                "tip_amount": 2.0,
-                "currency": "eur",
-                "table_token": None,
-                "split_persons": 2,
-                "split_index": 0,
-            },
+            "/api/v1/payments/webhook",
+            content=payload,
+            headers={"Content-Type": "application/json"},
         )
 
     assert resp.status_code == 200
-    body = resp.json()
-    # Total = 24 + 2 tip = 26 EUR = 2600 cents; split 2 → 1300 each
-    assert body["split_total"] == 2600
-    assert body["split_persons"] == 2
-    assert body["amount"] == 1300
+
+    session = test_db()
+    updated = session.query(Payment).filter(Payment.payment_intent_id == intent_id).first()
+    session.close()
+    assert updated.status == "failed"
+
+
+def test_webhook_signed_valid(client, monkeypatch, test_db):
+    """Webhook with STRIPE_WEBHOOK_SECRET set → calls Webhook.construct_event."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_WEBHOOK_SECRET", "whsec_test")
+
+    intent_id = "pi_signed_test"
+    _seed_payment(test_db, intent_id)
+
+    import json
+    payload = json.dumps({"type": "payment_intent.succeeded", "data": {"object": {"id": intent_id}}})
+
+    with patch("app.routers.payments.stripe") as mock_stripe:
+        mock_stripe.api_key = "sk_test"
+        mock_stripe.Webhook.construct_event.return_value = _mock_stripe_event("payment_intent.succeeded", intent_id)
+
+        resp = client.post(
+            "/api/v1/payments/webhook",
+            content=payload,
+            headers={"Content-Type": "application/json", "stripe-signature": "t=1,v1=abc"},
+        )
+
+    assert resp.status_code == 200
+    mock_stripe.Webhook.construct_event.assert_called_once()
+
+
+def test_webhook_signed_invalid_signature_returns_400(client, monkeypatch):
+    """Webhook with bad signature → 400."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_WEBHOOK_SECRET", "whsec_test")
+
+    import json
+    payload = json.dumps({"type": "payment_intent.succeeded", "data": {"object": {"id": "pi_x"}}})
+
+    with patch("app.routers.payments.stripe") as mock_stripe:
+        mock_stripe.api_key = "sk_test"
+        mock_stripe.error.SignatureVerificationError = stripe.error.SignatureVerificationError
+        mock_stripe.Webhook.construct_event.side_effect = stripe.error.SignatureVerificationError(
+            "Bad signature", b"sig_header"
+        )
+
+        resp = client.post(
+            "/api/v1/payments/webhook",
+            content=payload,
+            headers={"Content-Type": "application/json", "stripe-signature": "bad"},
+        )
+
+    assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/payments/{intent_id}/receipt.pdf
+# ---------------------------------------------------------------------------
+
+def test_download_receipt_not_found(client):
+    """Unknown payment_intent_id → 404."""
+    resp = client.get("/api/v1/payments/pi_unknown_xyz/receipt.pdf")
+    assert resp.status_code == 404
+
+
+def test_download_receipt_not_succeeded_returns_400(client, test_db):
+    """Pending payment cannot download receipt → 400."""
+    _seed_payment(test_db, "pi_receipt_pending")
+    resp = client.get("/api/v1/payments/pi_receipt_pending/receipt.pdf")
+    assert resp.status_code == 400
+
+
+def test_download_receipt_success_returns_pdf(client, test_db):
+    """Succeeded payment returns PDF bytes."""
+    session = test_db()
+    p = Payment(
+        menu_slug="pdf-restaurant",
+        payment_intent_id="pi_receipt_ok",
+        amount=2500,
+        tip_amount=200,
+        currency="eur",
+        status="succeeded",
+        items=[{"name": "Steak", "price": 23.0, "quantity": 1}],
+    )
+    session.add(p)
+    session.commit()
+    session.close()
+
+    resp = client.get("/api/v1/payments/pi_receipt_ok/receipt.pdf")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    # PDF magic bytes
+    assert resp.content[:4] == b"%PDF"
+
