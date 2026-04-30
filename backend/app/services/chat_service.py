@@ -177,7 +177,6 @@ def chat_about_menu_with_order(
             if fc.name == "place_order":
                 order_data = dict(fc.args) if fc.args else {}
                 # Build a confirmation message by sending function_response back
-                lang_name = LANG_NAMES.get(lang, "English")
                 items = order_data.get("items", [])
                 item_names = ", ".join(
                     f"{i.get('quantity', 1)}× {i.get('name', '')}" for i in items
