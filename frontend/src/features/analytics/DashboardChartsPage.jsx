@@ -23,7 +23,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   BarChart2, Users, ShoppingBag, MessageSquare,
   TrendingUp, TrendingDown, Minus, ArrowLeft, Loader2,
-  UtensilsCrossed, AlertCircle,
+  UtensilsCrossed, AlertCircle, Download,
 } from 'lucide-react';
 import { api } from '../../api';
 
@@ -306,6 +306,7 @@ export default function DashboardChartsPage() {
   const [items, setItems] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     if (!slug) {
@@ -319,7 +320,7 @@ export default function DashboardChartsPage() {
       const [sumData, revData, covData, chatData, itemData] = await Promise.all([
         api.getAnalyticsSummary(slug, period),
         api.getAnalyticsRevenue(slug, period),
-        fetch(`/api/v1/analytics/covers?slug=${encodeURIComponent(slug)}&period=${period}`).then((r) => r.json()),
+        api.getAnalyticsCovers(slug, period),
         api.getAnalyticsChatbot(slug, period),
         api.getAnalyticsItems(slug, period),
       ]);
@@ -339,6 +340,22 @@ export default function DashboardChartsPage() {
     load();
   }, [load]);
 
+  const handleExportCsv = useCallback(async () => {
+    if (!slug || exporting) return;
+    setExporting(true);
+    try {
+      const now = new Date();
+      const days = period === '30d' ? 30 : 7;
+      const from = new Date(now - days * 86400_000).toISOString().slice(0, 10);
+      const to = now.toISOString().slice(0, 10);
+      await api.exportAnalyticsCsv(slug, from, to);
+    } catch (err) {
+      // silent — download just doesn't start
+    } finally {
+      setExporting(false);
+    }
+  }, [slug, period, exporting]);
+
   return (
     <div className="min-h-screen bg-neutral-50">
       {/* Header */}
@@ -356,7 +373,17 @@ export default function DashboardChartsPage() {
               <span className="text-neutral-400 text-sm hidden sm:block">· {slug}</span>
             )}
           </div>
-          <PeriodPicker period={period} onChange={setPeriod} />
+          <div className="flex items-center gap-2">
+            <PeriodPicker period={period} onChange={setPeriod} />
+            <button
+              onClick={handleExportCsv}
+              disabled={!slug || exporting}
+              title="Exporter CSV comptable"
+              className="p-2 border border-neutral-600 rounded-full hover:border-neutral-400 disabled:opacity-40 transition-colors"
+            >
+              {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            </button>
+          </div>
         </div>
       </header>
 
