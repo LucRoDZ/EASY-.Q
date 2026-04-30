@@ -1,6 +1,7 @@
+import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -8,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Order, Table
 from app.schemas import OrderCreate, OrderResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
 
@@ -88,8 +91,17 @@ def _next_pickup_number(db: Session, menu_slug: str) -> int:
     return (max_num or 0) + 1
 
 
+async def _publish_kds_event(menu_slug: str, event: dict) -> None:
+    """Best-effort: publish a KDS event to Redis. Silently ignored when Redis is down."""
+    try:
+        from app.core.redis import publish_order_event
+        await publish_order_event(menu_slug, event)
+    except Exception as exc:
+        logger.warning("KDS publish failed for %s: %s", menu_slug, exc)
+
+
 @router.post("", response_model=OrderResponse, status_code=201)
-def create_order(body: OrderCreate, db: Session = Depends(get_db)):
+def create_order(body: OrderCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Create a new order from the client menu.
 
     If no table_token is provided, this is a Scan & Go (takeout) order —
@@ -127,6 +139,26 @@ def create_order(body: OrderCreate, db: Session = Depends(get_db)):
     db.add(order)
     db.commit()
     db.refresh(order)
+
+    # Notify KDS screens via Redis pub/sub (best-effort)
+    background_tasks.add_task(
+        _publish_kds_event,
+        order.menu_slug,
+        {
+            "type": "new_order",
+            "order": {
+                "id": order.id,
+                "menu_slug": order.menu_slug,
+                "table_token": order.table_token,
+                "items": order.items or [],
+                "notes": order.notes,
+                "total": order.total,
+                "status": order.status,
+                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "pickup_number": order.pickup_number,
+            },
+        },
+    )
 
     return _build_response(order)
 

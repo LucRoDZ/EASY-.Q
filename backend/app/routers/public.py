@@ -21,7 +21,6 @@ from app.services.menu_service import (
     get_full_menu_data,
 )
 from app.services.chat_service import (
-    chat_about_menu,
     chat_about_menu_stream,
     chat_about_menu_with_order,
     MODEL,
@@ -58,11 +57,26 @@ router = APIRouter(prefix="/api/public", tags=["public"])
 
 @router.get("/menus/{slug}", response_model=PublicMenuResponse)
 def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get_db)):
+    # Check Redis cache first (5-min TTL)
+    try:
+        cached = asyncio.run(redis_core.get_menu_cache(slug, lang))
+        if cached:
+            return PublicMenuResponse(**cached)
+    except Exception:
+        pass  # Degrade gracefully if Redis is down
+
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
 
     data = get_menu_data(menu, lang)
+
+    # Store in cache for future requests
+    try:
+        asyncio.run(redis_core.set_menu_cache(slug, data, lang))
+    except Exception:
+        pass
+
     return PublicMenuResponse(**data)
 
 

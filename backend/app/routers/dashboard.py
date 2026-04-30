@@ -36,7 +36,7 @@ def get_dashboard_menus(db: Session = Depends(get_db)):
     table_counts: dict[str, int] = {}
     rows = (
         db.query(Table.menu_slug, func.count(Table.id))
-        .filter(Table.is_active == True)
+        .filter(Table.is_active)
         .group_by(Table.menu_slug)
         .all()
     )

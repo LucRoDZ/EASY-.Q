@@ -238,3 +238,47 @@ def _update_order_status(db: Session, order_id: int, new_status: str) -> Order |
     db.commit()
     db.refresh(order)
     return order
+
+
+# ---------------------------------------------------------------------------
+# Redis pub/sub background subscriber
+# ---------------------------------------------------------------------------
+
+async def kds_redis_subscriber() -> None:
+    """Long-running task: subscribe to all KDS Redis channels and broadcast to WebSocket clients.
+
+    Listens on pattern ``kds:*`` (one channel per restaurant slug).
+    Each message must be a JSON-encoded dict with at least ``{"type": "new_order"|"status_update", ...}``.
+    Forwards the decoded message to :data:`kds_manager`.broadcast(slug, event).
+    """
+    from app.core import redis as redis_core
+
+    try:
+        client = redis_core.get_client()
+    except RuntimeError:
+        logger.warning("KDS subscriber: Redis not available, skipping")
+        return
+
+    pubsub = client.pubsub()
+    try:
+        await pubsub.psubscribe("kds:*")
+        logger.info("KDS Redis subscriber started (pattern kds:*)")
+        async for message in pubsub.listen():
+            if message.get("type") != "pmessage":
+                continue
+            try:
+                channel: str = message["channel"]  # e.g. "kds:le-bistrot"
+                slug = channel.split(":", 1)[1] if ":" in channel else channel
+                event = json.loads(message["data"])
+                await kds_manager.broadcast(slug, event)
+            except Exception as exc:
+                logger.warning("KDS subscriber message error: %s", exc)
+    except Exception as exc:
+        logger.error("KDS subscriber fatal error: %s", exc)
+    finally:
+        try:
+            await pubsub.punsubscribe("kds:*")
+            await pubsub.aclose()
+        except Exception:
+            pass
+        logger.info("KDS Redis subscriber stopped")

@@ -86,20 +86,8 @@ def create_payment_intent(
     subtotal = sum(item.price * item.quantity for item in body.items)
     tip = max(0.0, body.tip_amount)
     total_euros = subtotal + tip
-    total_cents = _euros_to_cents(total_euros)
+    amount_cents = _euros_to_cents(total_euros)
     tip_cents = _euros_to_cents(tip)
-
-    # Split bill: divide total across persons
-    persons = max(1, body.split_persons)
-    if persons > 1:
-        per_person_cents = total_cents // persons
-        # Last person pays remainder to avoid rounding loss
-        if body.split_index >= persons:
-            amount_cents = total_cents - per_person_cents * (persons - 1)
-        else:
-            amount_cents = per_person_cents
-    else:
-        amount_cents = total_cents
 
     if amount_cents < 50:  # Stripe minimum: 0.50 EUR
         raise HTTPException(
@@ -116,9 +104,6 @@ def create_payment_intent(
             metadata={
                 "menu_slug": body.slug,
                 "table_token": body.table_token or "",
-                "split_persons": str(persons),
-                "split_index": str(body.split_index),
-                "split_total": str(total_cents),
             },
             automatic_payment_methods={"enabled": True},
         )
@@ -136,9 +121,6 @@ def create_payment_intent(
         currency=body.currency.lower(),
         status="pending",
         items=[item.model_dump() for item in body.items],
-        split_count=persons,
-        split_index=body.split_index,
-        split_total=total_cents if persons > 1 else None,
     )
     db.add(payment)
     db.commit()
@@ -148,29 +130,36 @@ def create_payment_intent(
         payment_intent_id=intent.id,
         amount=amount_cents,
         currency=body.currency.lower(),
-        split_total=total_cents if persons > 1 else None,
-        split_persons=persons,
     )
 
 
-def _send_receipt_background(db: Session, payment: Payment) -> None:
+def _send_receipt_background(
+    payment_intent_id: str,
+    menu_slug: str,
+    table_token: str | None,
+    amount_cents: int,
+) -> None:
     """Send payment receipt email to restaurant owner. Best-effort."""
+    from app.db import SessionLocal
+    db = SessionLocal()
     try:
         profile = (
             db.query(RestaurantProfile)
-            .filter(RestaurantProfile.slug == payment.menu_slug)
+            .filter(RestaurantProfile.slug == menu_slug)
             .first()
         )
         if not profile or not profile.owner_email:
             return
-        table_label = f"Token {payment.table_token[:8]}" if payment.table_token else "Sans table"
+        table_label = f"Token {table_token[:8]}" if table_token else "Sans table"
         send_new_payment_email(
             to=profile.owner_email,
-            amount=payment.amount / 100,
+            amount=amount_cents / 100,
             table=table_label,
         )
     except Exception as exc:
-        logger.warning("Receipt email failed for payment %s: %s", payment.payment_intent_id, exc)
+        logger.warning("Receipt email failed for payment %s: %s", payment_intent_id, exc)
+    finally:
+        db.close()
 
 
 @router.post("/webhook")
@@ -204,7 +193,7 @@ async def stripe_webhook(
             event = stripe.Webhook.construct_event(
                 payload, stripe_signature, STRIPE_WEBHOOK_SECRET
             )
-        except stripe.errors.SignatureVerificationError:
+        except stripe.error.SignatureVerificationError:
             raise HTTPException(status_code=400, detail="Invalid Stripe signature")
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Webhook error: {e}")
@@ -226,7 +215,13 @@ async def stripe_webhook(
             if event_type == "payment_intent.succeeded":
                 payment.status = "succeeded"
                 logger.info("Payment %s succeeded (€%.2f)", intent_id, payment.amount / 100)
-                background_tasks.add_task(_send_receipt_background, db, payment)
+                background_tasks.add_task(
+                    _send_receipt_background,
+                    payment.payment_intent_id,
+                    payment.menu_slug,
+                    payment.table_token,
+                    payment.amount,
+                )
             elif event_type == "payment_intent.payment_failed":
                 payment.status = "failed"
                 logger.warning("Payment %s failed", intent_id)
@@ -323,19 +318,6 @@ def _build_receipt_pdf(payment: Payment, restaurant_name: str) -> bytes:
         story.append(Spacer(1, 0.4 * cm))
         story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e5e5e5")))
         story.append(Spacer(1, 0.3 * cm))
-
-    # Split info
-    if payment.split_count and payment.split_count > 1:
-        story.append(Paragraph(
-            f"Partage : personne {payment.split_index}/{payment.split_count}",
-            label_style,
-        ))
-        if payment.split_total:
-            story.append(Paragraph(
-                f"Total table : {payment.split_total / 100:.2f} {payment.currency.upper()}",
-                label_style,
-            ))
-        story.append(Spacer(1, 0.2 * cm))
 
     # Tip
     if payment.tip_amount and payment.tip_amount > 0:

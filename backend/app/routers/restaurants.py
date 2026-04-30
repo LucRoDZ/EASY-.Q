@@ -7,7 +7,6 @@ Routes (prefix /api/v1/restaurants):
 """
 
 import io
-import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -94,6 +93,7 @@ def _to_response(p: RestaurantProfile) -> RestaurantProfileResponse:
         opening_hours=p.opening_hours,
         timezone=p.timezone,
         social_links=p.social_links,
+        google_place_id=p.google_place_id,
     )
 
 
@@ -137,6 +137,8 @@ def update_profile(
         profile.timezone = body.timezone
     if body.social_links is not None:
         profile.social_links = body.social_links
+    if "google_place_id" in body.model_fields_set:
+        profile.google_place_id = body.google_place_id
 
     db.commit()
     db.refresh(profile)
