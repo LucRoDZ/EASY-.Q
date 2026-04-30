@@ -82,7 +82,9 @@ async def _run_ocr_background(
             if is_image:
                 menu_data = await loop.run_in_executor(None, extract_menu_from_images, [file_path])
             else:
-                menu_data = await loop.run_in_executor(None, extract_menu_from_pdf, file_path)
+                menu_data = await loop.run_in_executor(
+                    None, extract_menu_from_pdf, file_path, _slugify(restaurant_name)
+                )
 
             # Validate and normalise OCR output
             menu_data = validate_ocr_result(menu_data)
