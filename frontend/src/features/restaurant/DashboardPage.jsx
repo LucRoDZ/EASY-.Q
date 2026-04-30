@@ -348,7 +348,7 @@ function QuickActionsCard({ menu }) {
           sub="Génération QR par table"
         />
         <ActionTile
-          to="/dashboard"
+          to={menu ? `/dashboard/${menu.slug}` : '/dashboard/conversations'}
           icon={ClipboardList}
           label="Voir les conversations"
           sub="Historique chatbot IA"
