@@ -95,6 +95,7 @@ class RestaurantProfile(Base):
     opening_hours = Column(JSON, nullable=True)  # {"lundi": {"open": "09:00", "close": "22:00", "closed": false}, ...}
     timezone = Column(String(100), nullable=True, default="Europe/Paris")
     social_links = Column(JSON, nullable=True)   # {"instagram": url, "facebook": url, "google_maps": url}
+    google_place_id = Column(String(255), nullable=True)  # Google Maps Place ID for Google Review CTA
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -112,9 +113,6 @@ class Payment(Base):
     currency = Column(String(10), nullable=False, default="eur")
     status = Column(String(20), nullable=False, default="pending")  # pending|succeeded|failed
     items = Column(JSON, nullable=True)            # cart snapshot [{name, price, quantity}]
-    split_count = Column(Integer, nullable=False, default=1)    # total persons splitting
-    split_index = Column(Integer, nullable=False, default=1)    # 1-based: which person
-    split_total = Column(Integer, nullable=True)                # total before split (cents)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

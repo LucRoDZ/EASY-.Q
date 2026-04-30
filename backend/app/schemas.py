@@ -269,6 +269,7 @@ class RestaurantProfileUpdate(BaseModel):
     opening_hours: Optional[dict] = None  # {day: DayHours}
     timezone: Optional[str] = None
     social_links: Optional[dict] = None   # {instagram, facebook, google_maps}
+    google_place_id: Optional[str] = None  # Google Maps Place ID for Google Review CTA
 
 
 class RestaurantProfileResponse(BaseModel):
@@ -281,6 +282,7 @@ class RestaurantProfileResponse(BaseModel):
     opening_hours: Optional[dict] = None
     timezone: Optional[str] = None
     social_links: Optional[dict] = None
+    google_place_id: Optional[str] = None
 
 
 class LogoUploadResponse(BaseModel):
@@ -321,20 +323,16 @@ class CartItem(BaseModel):
 class CreatePaymentIntentRequest(BaseModel):
     slug: str
     items: list[CartItem]
-    tip_amount: float = 0.0        # in euros
+    tip_amount: float = 0.0
     currency: str = "eur"
     table_token: Optional[str] = None
-    split_persons: int = 1         # number of people splitting the bill
-    split_index: int = 1           # 1-based: which person is paying
 
 
 class PaymentIntentResponse(BaseModel):
     client_secret: str
     payment_intent_id: str
-    amount: int                    # per-person amount in cents
+    amount: int
     currency: str
-    split_total: Optional[int] = None   # total before split (cents)
-    split_persons: int = 1
 
 
 # ---------------------------------------------------------------------------
