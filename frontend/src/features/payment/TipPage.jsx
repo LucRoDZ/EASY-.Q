@@ -83,7 +83,8 @@ export default function TipPage() {
   const handleConfirm = () => {
     const params = new URLSearchParams({ lang, currency });
     if (tableToken) params.set('table', tableToken);
-    params.set('tip', tipAmount.toFixed(2));
+    // CheckoutPage reads ?tip= as integer cents (parseInt)
+    params.set('tip', Math.round(tipAmount * 100).toString());
     navigate(`/menu/${slug}/checkout?${params}`);
   };
 

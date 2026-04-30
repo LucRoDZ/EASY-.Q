@@ -19,7 +19,7 @@ import { api } from '../../api';
 
 // ─── NPS Survey ──────────────────────────────────────────────────────────────
 
-function NPSSurvey({ slug, lang, paymentIntentId }) {
+function NPSSurvey({ slug, lang, paymentIntentId, googlePlaceId }) {
   const [score, setScore] = useState(null);
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -45,11 +45,24 @@ function NPSSurvey({ slug, lang, paymentIntentId }) {
   };
 
   if (submitted) {
+    const reviewUrl = googlePlaceId
+      ? `https://search.google.com/local/writereview?placeid=${googlePlaceId}`
+      : null;
     return (
-      <div className="bg-white rounded-xl border border-neutral-200 p-6 text-center">
+      <div className="bg-white rounded-xl border border-neutral-200 p-6 text-center space-y-3">
         <p className="text-neutral-700 font-medium">Merci pour votre retour !</p>
-        {score >= 9 && (
-          <p className="text-sm text-neutral-500 mt-2">
+        {score >= 9 && reviewUrl && (
+          <a
+            href={reviewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 bg-black text-white rounded-full px-5 py-2.5 text-sm font-medium hover:bg-neutral-800 transition-colors"
+          >
+            {lang === 'fr' ? 'Laisser un avis Google' : lang === 'es' ? 'Dejar una reseña en Google' : 'Leave a Google review'}
+          </a>
+        )}
+        {score >= 9 && !reviewUrl && (
+          <p className="text-sm text-neutral-500">
             Nous serions ravis que vous partagiez votre expérience en ligne.
           </p>
         )}
@@ -143,15 +156,53 @@ export default function ThankYouPage() {
   const lang = searchParams.get('lang') || 'fr';
   const redirectStatus = searchParams.get('redirect_status') || 'succeeded';
   const paymentIntentId = searchParams.get('payment_intent') || null;
+  const orderId = searchParams.get('order_id') ? parseInt(searchParams.get('order_id')) : null;
   const isSuccess = redirectStatus === 'succeeded';
 
   const [visible, setVisible] = useState(false);
+  const [pickupNumber, setPickupNumber] = useState(null);
+  const [secondsRemaining, setSecondsRemaining] = useState(null);
+  const [googlePlaceId, setGooglePlaceId] = useState(null);
 
   // Trigger entrance animation after mount
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 50);
     return () => clearTimeout(t);
   }, []);
+
+  // Fetch restaurant profile for Google Review CTA
+  useEffect(() => {
+    if (!slug || !isSuccess) return;
+    fetch(`/api/v1/restaurants/${slug}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((profile) => {
+        if (profile?.google_place_id) setGooglePlaceId(profile.google_place_id);
+      })
+      .catch(() => {});
+  }, [slug, isSuccess]);
+
+  // Fetch order to show pickup number + countdown for Scan & Go / chatbot orders
+  useEffect(() => {
+    if (!orderId || !isSuccess) return;
+    fetch(`/api/v1/orders/${orderId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((order) => {
+        if (order?.pickup_number) setPickupNumber(order.pickup_number);
+        if (order?.seconds_remaining > 0) setSecondsRemaining(order.seconds_remaining);
+      })
+      .catch(() => {});
+  }, [orderId, isSuccess]);
+
+  // Countdown tick
+  useEffect(() => {
+    if (!secondsRemaining) return;
+    if (secondsRemaining <= 0) {
+      setSecondsRemaining(null);
+      return;
+    }
+    const id = setTimeout(() => setSecondsRemaining((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(id);
+  }, [secondsRemaining]);
 
   const labels = {
     fr: {
@@ -220,8 +271,43 @@ export default function ThankYouPage() {
             <p className="text-neutral-500 mt-1 text-sm">
               {isSuccess ? t.success_sub : t.error_sub}
             </p>
+            {isSuccess && pickupNumber && (
+              <div className="mt-4 bg-neutral-900 text-white rounded-2xl px-6 py-4 inline-block">
+                <p className="text-xs text-neutral-400 mb-1 uppercase tracking-wide">
+                  {lang === 'fr' ? 'Numéro de retrait' : lang === 'es' ? 'Número de recogida' : 'Pickup number'}
+                </p>
+                <p className="text-5xl font-bold tabular-nums">#{pickupNumber}</p>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Order edit countdown (chatbot orders only) */}
+        {isSuccess && orderId && secondsRemaining !== null && (
+          <div
+            className={`transition-all duration-500 delay-150 ${
+              visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}
+          >
+            <div className="bg-white border border-neutral-200 rounded-xl px-5 py-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-900">
+                  {lang === 'fr' ? 'Modifier la commande' : lang === 'es' ? 'Modificar pedido' : 'Modify order'}
+                </p>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  {lang === 'fr'
+                    ? `Vous avez ${secondsRemaining}s pour modifier votre commande`
+                    : lang === 'es'
+                    ? `Tienes ${secondsRemaining}s para modificar tu pedido`
+                    : `You have ${secondsRemaining}s to modify your order`}
+                </p>
+              </div>
+              <span className="text-2xl font-bold text-neutral-900 tabular-nums">
+                {secondsRemaining}s
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* NPS survey (success only) */}
         {isSuccess && (
@@ -230,7 +316,7 @@ export default function ThankYouPage() {
               visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
             }`}
           >
-            <NPSSurvey slug={slug} lang={lang} paymentIntentId={paymentIntentId} />
+            <NPSSurvey slug={slug} lang={lang} paymentIntentId={paymentIntentId} googlePlaceId={googlePlaceId} />
           </div>
         )}
 
