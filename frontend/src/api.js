@@ -348,6 +348,28 @@ export const api = {
     return res.json();
   },
 
+  async getAnalyticsCovers(slug, period = '7d') {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/covers?slug=${encodeURIComponent(slug)}&period=${period}`);
+    if (!res.ok) throw new Error('Failed to load covers analytics');
+    return res.json();
+  },
+
+  async exportAnalyticsCsv(slug, from, to) {
+    const params = new URLSearchParams({ slug, from_date: from, to_date: to, format: 'csv' });
+    const res = await fetch(`${API_BASE}/api/v1/analytics/export?${params}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Export failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics-${slug}-${from}-${to}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
   // Restaurant profile
   async getRestaurantProfile(slug) {
     const res = await fetch(`${API_BASE}/api/v1/restaurants/${slug}`);
