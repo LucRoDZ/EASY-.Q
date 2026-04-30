@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import AuditLog, Menu, Order, Payment, Subscription
+from app.routers.auth import require_admin
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -30,7 +31,8 @@ def _menu_to_dict(menu: Menu, subscription: Subscription | None = None) -> dict:
         "id": menu.id,
         "slug": menu.slug,
         "restaurant_name": menu.restaurant_name,
-        "status": menu.status,
+        "ocr_status": menu.status,          # "processing" | "ready" | "error"
+        "publish_status": menu.publish_status,  # "draft" | "published"
         "languages": menu.languages,
         "created_at": menu.created_at.isoformat() if menu.created_at else None,
         "plan": subscription.plan if subscription else "free",
@@ -47,7 +49,7 @@ def _menu_to_dict(menu: Menu, subscription: Subscription | None = None) -> dict:
 
 
 @router.get("/stats")
-def get_admin_stats(db: Session = Depends(get_db)):
+def get_admin_stats(db: Session = Depends(get_db), _: dict = Depends(require_admin)):
     """Global platform KPIs."""
     total_restaurants = db.query(func.count(Menu.id)).scalar() or 0
     active_restaurants = (
@@ -90,14 +92,17 @@ def get_admin_stats(db: Session = Depends(get_db)):
 
 @router.get("/restaurants")
 def list_restaurants(
-    status: str | None = Query(None, description="Filter by status: active|inactive"),
+    status: str | None = Query(None, description="Filter by publish status: published|draft"),
     plan: str | None = Query(None, description="Filter by plan: free|pro"),
     db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     """List all restaurants with subscription info."""
     query = db.query(Menu)
     if status:
-        query = query.filter(Menu.status == status)
+        # Map legacy "active"/"inactive" to publish_status values
+        publish_status = {"active": "published", "inactive": "draft"}.get(status, status)
+        query = query.filter(Menu.publish_status == publish_status)
     menus = query.order_by(Menu.created_at.desc()).all()
 
     # Fetch subscriptions keyed by slug (restaurant_id == slug in our data)
@@ -115,17 +120,22 @@ def list_restaurants(
 
 
 @router.patch("/restaurants/{slug}/status")
-def update_restaurant_status(slug: str, body: dict, db: Session = Depends(get_db)):
-    """Activate or deactivate a restaurant (sets Menu.status)."""
+def update_restaurant_status(
+    slug: str, body: dict, db: Session = Depends(get_db), _: dict = Depends(require_admin)
+):
+    """Publish or unpublish a restaurant menu (sets Menu.publish_status)."""
     new_status = body.get("status")
-    if new_status not in ("active", "inactive"):
+    if new_status not in ("active", "inactive", "published", "draft"):
         raise HTTPException(
-            status_code=400, detail="status must be 'active' or 'inactive'"
+            status_code=400, detail="status must be 'active'/'published' or 'inactive'/'draft'"
         )
+    # Normalise legacy "active"/"inactive" to publish_status values
+    publish_status = {"active": "published", "inactive": "draft"}.get(new_status, new_status)
+
     menu = db.query(Menu).filter(Menu.slug == slug).first()
     if not menu:
         raise HTTPException(status_code=404, detail="Restaurant not found")
-    menu.status = new_status
+    menu.publish_status = publish_status
     db.commit()
     db.refresh(menu)
 
@@ -133,15 +143,15 @@ def update_restaurant_status(slug: str, body: dict, db: Session = Depends(get_db
     log = AuditLog(
         actor_type="admin",
         actor_id="superadmin",
-        action=f"restaurant.{new_status}",
+        action=f"restaurant.{publish_status}",
         resource_type="menu",
         resource_id=slug,
-        payload={"slug": slug, "new_status": new_status},
+        payload={"slug": slug, "publish_status": publish_status},
     )
     db.add(log)
     db.commit()
 
-    return {"slug": slug, "status": menu.status}
+    return {"slug": slug, "publish_status": menu.publish_status}
 
 
 @router.get("/subscriptions")
@@ -149,6 +159,7 @@ def list_subscriptions(
     plan: str | None = Query(None),
     status: str | None = Query(None),
     db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     """List all subscriptions."""
     query = db.query(Subscription)
@@ -190,6 +201,7 @@ def list_audit_logs(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
 ):
     """Paginated audit log viewer with optional filters."""
     query = db.query(AuditLog)

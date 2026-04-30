@@ -38,3 +38,16 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 # KDS (Kitchen Display System) — simple token auth, not Clerk
 KDS_SECRET_TOKEN = os.getenv("KDS_SECRET_TOKEN", "kds-dev-token-change-in-production")
+
+# Clerk auth
+CLERK_WEBHOOK_SECRET = os.getenv("CLERK_WEBHOOK_SECRET", "")  # whsec_... from Clerk dashboard
+CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")  # https://<clerk-domain>/.well-known/jwks.json
+# Comma-separated Clerk user IDs that may access /api/v1/admin/* endpoints
+ADMIN_USER_IDS: list[str] = [
+    uid.strip()
+    for uid in os.getenv("ADMIN_USER_IDS", "").split(",")
+    if uid.strip()
+]
+
+# Sentry error tracking
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")  # Leave empty to disable Sentry

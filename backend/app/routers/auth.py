@@ -11,10 +11,12 @@ import json
 import logging
 from base64 import b64decode
 
+import requests as _requests
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from jose import JWTError, jwt as jose_jwt
 from sqlalchemy.orm import Session
 
-from app.config import CLERK_WEBHOOK_SECRET
+from app.config import ADMIN_USER_IDS, CLERK_JWKS_URL, CLERK_WEBHOOK_SECRET
 from app.db import get_db
 from app.models import AuditLog, Subscription
 
@@ -56,6 +58,86 @@ def _extract_bearer(authorization: str | None) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     return authorization[len("Bearer "):]
+
+
+# ---------------------------------------------------------------------------
+# JWKS-verified JWT decoding
+# ---------------------------------------------------------------------------
+
+_jwks_cache: dict | None = None
+
+
+def _get_jwks() -> dict:
+    """Fetch Clerk JWKS (cached in memory for the process lifetime)."""
+    global _jwks_cache
+    if _jwks_cache is not None:
+        return _jwks_cache
+    if not CLERK_JWKS_URL:
+        raise HTTPException(status_code=500, detail="CLERK_JWKS_URL not configured")
+    try:
+        resp = _requests.get(CLERK_JWKS_URL, timeout=5)
+        resp.raise_for_status()
+        _jwks_cache = resp.json()
+        return _jwks_cache
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch JWKS: {exc}")
+
+
+def _verify_jwt(token: str) -> dict:
+    """Decode and verify a Clerk JWT against the JWKS.
+
+    Falls back to unverified decode when CLERK_JWKS_URL is not set (dev mode).
+    """
+    if not CLERK_JWKS_URL:
+        # Dev mode — decode without signature verification
+        return _decode_jwt_payload(token)
+
+    try:
+        jwks = _get_jwks()
+        # python-jose can resolve the key from the JWKS set automatically
+        payload = jose_jwt.decode(
+            token,
+            jwks,
+            algorithms=["RS256"],
+            options={"verify_aud": False},
+        )
+        return payload
+    except JWTError as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid token signature: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Admin guard dependency
+# ---------------------------------------------------------------------------
+
+
+def require_admin(authorization: str | None = Header(None)) -> dict:
+    """FastAPI dependency — raises 401/403 unless the caller is a known admin.
+
+    Usage::
+
+        @router.get("/stats")
+        def get_stats(db: Session = Depends(get_db), _: dict = Depends(require_admin)):
+            ...
+    """
+    token = _extract_bearer(authorization)
+    payload = _verify_jwt(token)
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token missing sub claim")
+
+    if not ADMIN_USER_IDS:
+        # No admins configured — deny all access (fail-secure)
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access not configured. Set ADMIN_USER_IDS env var.",
+        )
+
+    if user_id not in ADMIN_USER_IDS:
+        raise HTTPException(status_code=403, detail="Forbidden: admin access required")
+
+    return payload
 
 
 # ---------------------------------------------------------------------------
