@@ -1,19 +1,21 @@
-env/
-.env
-backend/.env
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg
+*.egg-info/
+.installed.cfg
 .Python
 env/
 venv/
 ENV/
+.venv/
 build/
-develop-eggs/
-dist/
 dev-dist/
+dist/
 downloads/
+develop-eggs/
 eggs/
 .eggs/
 lib/
@@ -22,19 +24,54 @@ parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
-# IDEs
+# ── Environment / Secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# ── Databases ─────────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Test / Coverage artifacts ─────────────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ── Frontend build ────────────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/build/
+.vite/
+dev-dist/
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
-*.db
+.DS_Store
+Thumbs.db
 
-node_modules/
+# ── Ralph runtime state (logs, metrics, session state) ────────────────────────
+.ralph/logs/
+.ralph/live.log
+.ralph/progress.json
+.ralph/status.json
+.ralph/docs/generated/
+.ralphrc
 
-.vite/
+# ── Claude Code ───────────────────────────────────────────────────────────────
+.claude
 
+# ── Local file storage (use R2 in production) ─────────────────────────────────
+storage/
+backend/storage/
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
 apr_data/
