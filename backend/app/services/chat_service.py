@@ -7,7 +7,7 @@ from app.config import GOOGLE_API_KEY
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-2.5-flash-lite"
 
 # ---------------------------------------------------------------------------
 # place_order function declaration for Gemini function calling
