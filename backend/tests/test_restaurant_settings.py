@@ -323,3 +323,124 @@ def test_logo_upload_png_resized_to_512(client, test_db):
         img = Image.open(io.BytesIO(written_data["bytes"]))
         assert img.width <= 512
         assert img.height <= 512
+
+
+# ---------------------------------------------------------------------------
+# GET /{slug}/google-rating — Google Places widget
+# ---------------------------------------------------------------------------
+
+def test_google_rating_no_place_id_returns_empty(client, test_db):
+    """When restaurant has no google_place_id, endpoint returns {}."""
+    # Auto-creates profile with no place_id
+    resp = client.get("/api/v1/restaurants/no-place-id/google-rating")
+    assert resp.status_code == 200
+    assert resp.json() == {}
+
+
+def test_google_rating_no_api_key_returns_empty(client, test_db, monkeypatch):
+    """When GOOGLE_API_KEY is empty, endpoint returns {} even if place_id set."""
+    monkeypatch.setattr("app.routers.restaurants.GOOGLE_API_KEY", "")
+
+    session = test_db()
+    profile = RestaurantProfile(
+        slug="no-api-key-test",
+        name="Test",
+        google_place_id="ChIJN1t_tDeuEmsRUsoyG83frY4",
+    )
+    session.add(profile)
+    session.commit()
+    session.close()
+
+    resp = client.get("/api/v1/restaurants/no-api-key-test/google-rating")
+    assert resp.status_code == 200
+    assert resp.json() == {}
+
+
+def test_google_rating_returns_rating_from_api(client, test_db, monkeypatch):
+    """When place_id + API key set, fetches and returns rating."""
+    monkeypatch.setattr("app.routers.restaurants.GOOGLE_API_KEY", "fake_key")
+    # Clear any cached entry
+    import app.routers.restaurants as rest_module
+    rest_module._GOOGLE_RATING_CACHE.clear()
+
+    session = test_db()
+    profile = RestaurantProfile(
+        slug="has-rating",
+        name="Test",
+        google_place_id="ChIJN1t_tDeuEmsRUsoyG83frY4",
+    )
+    session.add(profile)
+    session.commit()
+    session.close()
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "result": {"rating": 4.6, "user_ratings_total": 312},
+        "status": "OK",
+    }
+
+    with patch("app.routers.restaurants._requests") as mock_requests:
+        mock_requests.get.return_value = mock_resp
+        resp = client.get("/api/v1/restaurants/has-rating/google-rating")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["rating"] == 4.6
+    assert body["user_ratings_total"] == 312
+    assert body["place_id"] == "ChIJN1t_tDeuEmsRUsoyG83frY4"
+
+
+def test_google_rating_api_error_returns_empty(client, test_db, monkeypatch):
+    """When Google Places API throws, endpoint returns {} gracefully."""
+    monkeypatch.setattr("app.routers.restaurants.GOOGLE_API_KEY", "fake_key")
+    import app.routers.restaurants as rest_module
+    rest_module._GOOGLE_RATING_CACHE.clear()
+
+    session = test_db()
+    profile = RestaurantProfile(
+        slug="api-error-test",
+        name="Test",
+        google_place_id="ChIJerror",
+    )
+    session.add(profile)
+    session.commit()
+    session.close()
+
+    with patch("app.routers.restaurants._requests") as mock_requests:
+        mock_requests.get.side_effect = Exception("Network error")
+        resp = client.get("/api/v1/restaurants/api-error-test/google-rating")
+
+    assert resp.status_code == 200
+    assert resp.json() == {}
+
+
+def test_google_rating_cached_skips_api_call(client, test_db, monkeypatch):
+    """Second request within cache TTL returns cached data without hitting API."""
+    monkeypatch.setattr("app.routers.restaurants.GOOGLE_API_KEY", "fake_key")
+    import app.routers.restaurants as rest_module
+    import time
+    rest_module._GOOGLE_RATING_CACHE.clear()
+
+    session = test_db()
+    profile = RestaurantProfile(
+        slug="cache-test",
+        name="Test",
+        google_place_id="ChIJcache",
+    )
+    session.add(profile)
+    session.commit()
+    session.close()
+
+    # Seed the cache directly
+    rest_module._GOOGLE_RATING_CACHE["ChIJcache"] = {
+        "rating": 4.2,
+        "total": 99,
+        "cached_at": time.time(),
+    }
+
+    with patch("app.routers.restaurants._requests") as mock_requests:
+        resp = client.get("/api/v1/restaurants/cache-test/google-rating")
+        mock_requests.get.assert_not_called()
+
+    assert resp.status_code == 200
+    assert resp.json()["rating"] == 4.2

@@ -25,12 +25,13 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from sqlalchemy.orm import Session
 
 from app.config import (
+    STRIPE_PLATFORM_FEE_PERCENT,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,
 )
 from app.db import get_db
-from app.models import Payment, RestaurantProfile
+from app.models import Order, Payment, RestaurantProfile
 from app.schemas import CreatePaymentIntentRequest, PaymentIntentResponse
 from app.services.email_service import send_new_payment_email
 from app.routers.subscriptions import require_pro
@@ -95,18 +96,29 @@ def create_payment_intent(
             detail="Le montant minimum est de 0,50 €",
         )
 
+    # Look up restaurant's Stripe Connect account
+    profile = db.query(RestaurantProfile).filter(RestaurantProfile.slug == body.slug).first()
+    stripe_account_id = profile.stripe_account_id if profile else None
+
+    # Build PaymentIntent params — add Connect split when account is configured
+    intent_params: dict = {
+        "amount": amount_cents,
+        "currency": body.currency.lower(),
+        "capture_method": "automatic",
+        "metadata": {
+            "menu_slug": body.slug,
+            "table_token": body.table_token or "",
+        },
+        "automatic_payment_methods": {"enabled": True},
+    }
+    if stripe_account_id:
+        fee = max(1, int(amount_cents * STRIPE_PLATFORM_FEE_PERCENT))
+        intent_params["application_fee_amount"] = fee
+        intent_params["transfer_data"] = {"destination": stripe_account_id}
+
     # Create PaymentIntent
     try:
-        intent = stripe.PaymentIntent.create(
-            amount=amount_cents,
-            currency=body.currency.lower(),
-            capture_method="automatic",
-            metadata={
-                "menu_slug": body.slug,
-                "table_token": body.table_token or "",
-            },
-            automatic_payment_methods={"enabled": True},
-        )
+        intent = stripe.PaymentIntent.create(**intent_params)
     except stripe.StripeError as e:
         logger.error("Stripe PaymentIntent error: %s", e)
         raise HTTPException(status_code=502, detail=str(e))
@@ -123,13 +135,29 @@ def create_payment_intent(
         items=[item.model_dump() for item in body.items],
     )
     db.add(payment)
+
+    # Create an Order so KDS is notified on success and pickup number is pre-assigned
+    from app.routers.orders import _next_pickup_number
+    pickup_number = None if body.table_token else _next_pickup_number(db, body.slug)
+    order = Order(
+        menu_slug=body.slug,
+        table_token=body.table_token,
+        items=[item.model_dump() for item in body.items],
+        total=amount_cents,
+        currency=body.currency.lower(),
+        status="pending",
+        pickup_number=pickup_number,
+    )
+    db.add(order)
     db.commit()
+    db.refresh(order)
 
     return PaymentIntentResponse(
         client_secret=intent.client_secret,
         payment_intent_id=intent.id,
         amount=amount_cents,
         currency=body.currency.lower(),
+        order_id=order.id,
     )
 
 
@@ -222,12 +250,65 @@ async def stripe_webhook(
                     payment.table_token,
                     payment.amount,
                 )
+                # Confirm the order and broadcast to KDS
+                order = (
+                    db.query(Order)
+                    .filter(
+                        Order.menu_slug == payment.menu_slug,
+                        Order.table_token == payment.table_token,
+                        Order.status == "pending",
+                    )
+                    .order_by(Order.created_at.desc())
+                    .first()
+                )
+                if order:
+                    order.status = "confirmed"
+                    db.flush()
+                    background_tasks.add_task(
+                        _broadcast_order_confirmed,
+                        order.id,
+                        order.menu_slug,
+                        order.table_token,
+                        order.items or [],
+                        order.pickup_number,
+                    )
             elif event_type == "payment_intent.payment_failed":
                 payment.status = "failed"
                 logger.warning("Payment %s failed", intent_id)
             db.commit()
 
     return {"received": True}
+
+
+def _broadcast_order_confirmed(
+    order_id: int,
+    menu_slug: str,
+    table_token: str | None,
+    items: list,
+    pickup_number: int | None,
+) -> None:
+    """Best-effort: broadcast order confirmed event to KDS via Redis."""
+    import asyncio
+    from app.core.redis import publish_order_event
+    try:
+        asyncio.run(
+            publish_order_event(
+                menu_slug,
+                {
+                    "type": "new_order",
+                    "order": {
+                        "id": order_id,
+                        "menu_slug": menu_slug,
+                        "table_token": table_token,
+                        "items": items,
+                        "status": "confirmed",
+                        "pickup_number": pickup_number,
+                    },
+                },
+            )
+        )
+    except Exception as exc:
+        logger.warning("KDS broadcast failed for order %s: %s", order_id, exc)
 
 
 # ---------------------------------------------------------------------------

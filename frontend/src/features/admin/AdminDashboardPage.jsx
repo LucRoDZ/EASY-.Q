@@ -12,9 +12,51 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   Loader2, LayoutDashboard, Store, CreditCard,
   ScrollText, RefreshCw, ChevronLeft, ChevronRight,
-  Search, AlertCircle,
+  Search, AlertCircle, Lock,
 } from 'lucide-react';
 import { api } from '../../api';
+
+const TOKEN_KEY = 'admin_clerk_token';
+
+function useAdminToken() {
+  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
+  const save = (t) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); };
+  const clear = () => { localStorage.removeItem(TOKEN_KEY); setToken(''); };
+  return [token, save, clear];
+}
+
+function TokenGate({ children }) {
+  const [token, saveToken] = useAdminToken();
+  const [input, setInput] = useState('');
+
+  if (token) return children;
+
+  return (
+    <div className="min-h-screen bg-neutral-50 flex items-center justify-center px-4">
+      <div className="bg-white border border-neutral-200 rounded-xl p-8 w-full max-w-sm space-y-4">
+        <div className="flex items-center gap-2 text-neutral-900">
+          <Lock size={18} />
+          <span className="font-semibold">Accès admin</span>
+        </div>
+        <p className="text-sm text-neutral-500">Entrez votre token Clerk (JWT Bearer).</p>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          rows={4}
+          placeholder="eyJ..."
+          className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:border-neutral-400"
+        />
+        <button
+          onClick={() => saveToken(input.trim())}
+          disabled={!input.trim()}
+          className="w-full bg-black text-white rounded-full py-2 text-sm hover:bg-neutral-800 disabled:opacity-40"
+        >
+          Confirmer
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Shared UI primitives
@@ -68,13 +110,13 @@ function LoadingSpinner() {
 // Tab: Overview
 // ---------------------------------------------------------------------------
 
-function OverviewTab() {
+function OverviewTab({ token }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getAdminStats().then(setStats).finally(() => setLoading(false));
-  }, []);
+    api.getAdminStats(token).then(setStats).finally(() => setLoading(false));
+  }, [token]);
 
   if (loading) return <LoadingSpinner />;
   if (!stats) return <EmptyState message="Impossible de charger les statistiques." />;
@@ -93,7 +135,7 @@ function OverviewTab() {
 // Tab: Restaurants
 // ---------------------------------------------------------------------------
 
-function RestaurantsTab() {
+function RestaurantsTab({ token }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(null); // slug being confirmed
@@ -101,21 +143,21 @@ function RestaurantsTab() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.getAdminRestaurants().then(setData).finally(() => setLoading(false));
-  }, []);
+    api.getAdminRestaurants(token).then(setData).finally(() => setLoading(false));
+  }, [token]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleToggleStatus = async (slug, currentStatus) => {
-    const next = currentStatus === 'active' ? 'inactive' : 'active';
+    const next = currentStatus === 'published' ? 'draft' : 'published';
     setUpdating(slug);
     setConfirming(null);
     try {
-      await api.patchAdminRestaurantStatus(slug, next);
+      await api.patchAdminRestaurantStatus(slug, next, token);
       setData((prev) => ({
         ...prev,
         restaurants: prev.restaurants.map((r) =>
-          r.slug === slug ? { ...r, status: next } : r
+          r.slug === slug ? { ...r, publish_status: next } : r
         ),
       }));
     } finally {
@@ -151,7 +193,7 @@ function RestaurantsTab() {
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <PlanBadge plan={r.plan} />
-                  <StatusBadge status={r.status} />
+                  <StatusBadge status={r.publish_status} />
                 </div>
               </div>
 
@@ -168,7 +210,7 @@ function RestaurantsTab() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-neutral-500">Confirmer ?</span>
                     <button
-                      onClick={() => handleToggleStatus(r.slug, r.status)}
+                      onClick={() => handleToggleStatus(r.slug, r.publish_status)}
                       disabled={updating === r.slug}
                       className="text-xs border border-neutral-900 text-neutral-900 rounded-full px-3 py-1 hover:bg-neutral-900 hover:text-white transition-colors disabled:opacity-50"
                     >
@@ -186,7 +228,7 @@ function RestaurantsTab() {
                     onClick={() => setConfirming(r.slug)}
                     className="text-xs border border-neutral-200 rounded-full px-3 py-1 text-neutral-600 hover:border-neutral-400 transition-colors"
                   >
-                    {r.status === 'active' ? 'Suspendre' : 'Réactiver'}
+                    {r.publish_status === 'published' ? 'Suspendre' : 'Réactiver'}
                   </button>
                 )}
               </div>
@@ -202,13 +244,13 @@ function RestaurantsTab() {
 // Tab: Subscriptions
 // ---------------------------------------------------------------------------
 
-function SubscriptionsTab() {
+function SubscriptionsTab({ token }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getAdminSubscriptions().then(setData).finally(() => setLoading(false));
-  }, []);
+    api.getAdminSubscriptions(token).then(setData).finally(() => setLoading(false));
+  }, [token]);
 
   if (loading) return <LoadingSpinner />;
 
@@ -259,7 +301,7 @@ function SubscriptionsTab() {
 
 const PAGE_SIZE = 50;
 
-function AuditLogsTab() {
+function AuditLogsTab({ token }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ action: '', resource_type: '', resource_id: '' });
@@ -267,10 +309,10 @@ function AuditLogsTab() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.getAdminAuditLogs({ ...filters, limit: PAGE_SIZE, offset })
+    api.getAdminAuditLogs(token, { ...filters, limit: PAGE_SIZE, offset })
       .then(setData)
       .finally(() => setLoading(false));
-  }, [filters, offset]);
+  }, [token, filters, offset]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -401,45 +443,54 @@ const TABS = [
 
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('overview');
+  const [token, , clearToken] = useAdminToken();
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      {/* Header */}
-      <header className="bg-black text-white sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
-          <AlertCircle size={18} className="text-neutral-400" />
-          <span className="font-semibold">Admin</span>
-          <span className="text-neutral-500 text-sm hidden sm:inline">· Backoffice superadmin</span>
-        </div>
-      </header>
-
-      {/* Tab nav */}
-      <div className="border-b border-neutral-200 bg-white sticky top-14 z-30">
-        <div className="max-w-5xl mx-auto px-4 flex gap-0 overflow-x-auto">
-          {TABS.map(({ id, label, icon: Icon }) => (
+    <TokenGate>
+      <div className="min-h-screen bg-neutral-50">
+        {/* Header */}
+        <header className="bg-black text-white sticky top-0 z-40">
+          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
+            <AlertCircle size={18} className="text-neutral-400" />
+            <span className="font-semibold">Admin</span>
+            <span className="text-neutral-500 text-sm hidden sm:inline">· Backoffice superadmin</span>
             <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-sm border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === id
-                  ? 'border-black text-neutral-900 font-medium'
-                  : 'border-transparent text-neutral-500 hover:text-neutral-700'
-              }`}
+              onClick={clearToken}
+              className="ml-auto text-xs text-neutral-400 hover:text-white transition-colors"
             >
-              <Icon size={14} />
-              {label}
+              Déconnexion
             </button>
-          ))}
-        </div>
-      </div>
+          </div>
+        </header>
 
-      {/* Content */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {activeTab === 'overview'      && <OverviewTab />}
-        {activeTab === 'restaurants'   && <RestaurantsTab />}
-        {activeTab === 'subscriptions' && <SubscriptionsTab />}
-        {activeTab === 'audit-logs'    && <AuditLogsTab />}
-      </main>
-    </div>
+        {/* Tab nav */}
+        <div className="border-b border-neutral-200 bg-white sticky top-14 z-30">
+          <div className="max-w-5xl mx-auto px-4 flex gap-0 overflow-x-auto">
+            {TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`flex items-center gap-1.5 px-4 py-3 text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  activeTab === id
+                    ? 'border-black text-neutral-900 font-medium'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-700'
+                }`}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        <main className="max-w-5xl mx-auto px-4 py-8">
+          {activeTab === 'overview'      && <OverviewTab token={token} />}
+          {activeTab === 'restaurants'   && <RestaurantsTab token={token} />}
+          {activeTab === 'subscriptions' && <SubscriptionsTab token={token} />}
+          {activeTab === 'audit-logs'    && <AuditLogsTab token={token} />}
+        </main>
+      </div>
+    </TokenGate>
   );
 }

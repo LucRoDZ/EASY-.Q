@@ -1,4 +1,5 @@
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { t } from '../../localization/translations';
@@ -22,7 +23,9 @@ export default function CartPage() {
   const currency = searchParams.get('currency') || 'EUR';
   const navigate = useNavigate();
 
-  const { items, updateQuantity, removeItem, total, itemCount } = useCart();
+  const { items, updateQuantity, removeItem, total, itemCount, setSlug } = useCart();
+
+  useEffect(() => { setSlug(slug); }, [slug, setSlug]);
 
   return (
     <div className="min-h-screen bg-neutral-50">

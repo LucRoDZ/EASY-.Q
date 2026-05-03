@@ -108,7 +108,7 @@ async def test_health_check_database_unhealthy(client, fake_redis, monkeypatch):
         with patch("app.routers.health.storage_configured", return_value=False):
             response = client.get("/api/v1/health")
 
-            assert response.status_code == 200
+            assert response.status_code == 503
             data = response.json()
             assert data["status"] == "degraded"
             assert data["checks"]["database"]["status"] == "unhealthy"
@@ -129,7 +129,7 @@ async def test_health_check_redis_unhealthy(client, monkeypatch):
     with patch("app.routers.health.storage_configured", return_value=False):
         response = client.get("/api/v1/health")
 
-        assert response.status_code == 200
+        assert response.status_code == 503
         data = response.json()
         assert data["status"] == "degraded"
         assert data["checks"]["redis"]["status"] == "unhealthy"
@@ -168,7 +168,7 @@ async def test_health_check_storage_unhealthy(client, fake_redis, monkeypatch):
 
         response = client.get("/api/v1/health")
 
-        assert response.status_code == 200
+        assert response.status_code == 503
         data = response.json()
         assert data["status"] == "degraded"
         assert data["checks"]["storage"]["status"] == "unhealthy"
@@ -193,7 +193,7 @@ async def test_health_check_multiple_services_down(client, monkeypatch):
         with patch("app.routers.health.storage_configured", return_value=False):
             response = client.get("/api/v1/health")
 
-            assert response.status_code == 200
+            assert response.status_code == 503
             data = response.json()
             assert data["status"] == "degraded"
             assert data["checks"]["database"]["status"] == "unhealthy"

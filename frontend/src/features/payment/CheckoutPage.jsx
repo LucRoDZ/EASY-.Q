@@ -11,7 +11,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import {
+  Elements,
+  PaymentElement,
+  PaymentRequestButtonElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js';
 import { Loader2, ArrowLeft, ShoppingBag, Lock } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { api } from '../../api';
@@ -42,11 +48,57 @@ function formatPriceEuros(euros, currency = 'EUR') {
 
 // ─── PaymentForm (inner — must be inside <Elements>) ─────────────────────────
 
-function PaymentForm({ amount, currency, slug, lang, onSuccess }) {
+function PaymentForm({ amount, currency, slug, lang, clientSecret, orderId }) {
   const stripe = useStripe();
   const elements = useElements();
+  const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [paymentRequest, setPaymentRequest] = useState(null);
+
+  // Build PaymentRequest for Apple Pay / Google Pay
+  useEffect(() => {
+    if (!stripe || !amount || typeof stripe.paymentRequest !== 'function') return;
+    const pr = stripe.paymentRequest({
+      country: 'FR',
+      currency: currency.toLowerCase(),
+      total: { label: 'Total commande', amount },
+      requestPayerName: false,
+      requestPayerEmail: false,
+    });
+    pr.canMakePayment().then((result) => {
+      if (result) setPaymentRequest(pr);
+    });
+  }, [stripe, amount, currency]);
+
+  // Handle Apple/Google Pay confirmation
+  useEffect(() => {
+    if (!paymentRequest || !stripe || !clientSecret) return;
+    const handler = async (ev) => {
+      const { paymentIntent, error } = await stripe.confirmCardPayment(
+        clientSecret,
+        { payment_method: ev.paymentMethod.id },
+        { handleActions: false },
+      );
+      if (error) {
+        ev.complete('fail');
+        setErrorMsg(error.message || 'Paiement refusé');
+        return;
+      }
+      if (paymentIntent.status === 'requires_action') {
+        const { error: actionError } = await stripe.confirmCardPayment(clientSecret);
+        if (actionError) {
+          ev.complete('fail');
+          setErrorMsg(actionError.message || 'Authentification requise');
+          return;
+        }
+      }
+      ev.complete('success');
+      navigate(`/menu/${slug}/thank-you?lang=${lang}${orderId ? `&order_id=${orderId}` : ''}`);
+    };
+    paymentRequest.on('paymentmethod', handler);
+    return () => paymentRequest.off('paymentmethod', handler);
+  }, [paymentRequest, stripe, clientSecret, slug, lang, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -55,7 +107,7 @@ function PaymentForm({ amount, currency, slug, lang, onSuccess }) {
     setSubmitting(true);
     setErrorMsg('');
 
-    const returnUrl = `${window.location.origin}/menu/${slug}/thank-you?lang=${lang}`;
+    const returnUrl = `${window.location.origin}/menu/${slug}/thank-you?lang=${lang}${orderId ? `&order_id=${orderId}` : ''}`;
 
     const { error } = await stripe.confirmPayment({
       elements,
@@ -70,40 +122,67 @@ function PaymentForm({ amount, currency, slug, lang, onSuccess }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="bg-white rounded-xl border border-neutral-200 p-6">
-        <h2 className="font-semibold text-neutral-900 mb-4 text-sm">
-          Informations de paiement
-        </h2>
-        <PaymentElement
-          options={{
-            layout: 'tabs',
-            wallets: { applePay: 'auto', googlePay: 'auto' },
-          }}
-        />
-      </div>
-
-      {errorMsg && (
-        <p className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">{errorMsg}</p>
+    <div className="space-y-4">
+      {/* Apple Pay / Google Pay button */}
+      {paymentRequest && (
+        <div className="space-y-3">
+          <div className="bg-white rounded-xl border border-neutral-200 p-4">
+            <PaymentRequestButtonElement
+              options={{
+                paymentRequest,
+                style: {
+                  paymentRequestButton: {
+                    type: 'buy',
+                    theme: 'dark',
+                    height: '48px',
+                  },
+                },
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 border-t border-neutral-200" />
+            <span className="text-xs text-neutral-400">ou par carte</span>
+            <div className="flex-1 border-t border-neutral-200" />
+          </div>
+        </div>
       )}
 
-      <button
-        type="submit"
-        disabled={!stripe || submitting}
-        className="w-full bg-black text-white rounded-full py-3.5 font-medium hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-      >
-        {submitting ? (
-          <Loader2 size={18} className="animate-spin" />
-        ) : (
-          <Lock size={16} />
-        )}
-        {submitting ? 'Traitement…' : `Payer ${formatPrice(amount, currency)}`}
-      </button>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="bg-white rounded-xl border border-neutral-200 p-6">
+          <h2 className="font-semibold text-neutral-900 mb-4 text-sm">
+            Informations de paiement
+          </h2>
+          <PaymentElement
+            options={{
+              layout: 'tabs',
+              wallets: { applePay: 'never', googlePay: 'never' },
+            }}
+          />
+        </div>
 
-      <p className="text-center text-xs text-neutral-400">
-        Paiement sécurisé · Propulsé par Stripe
-      </p>
-    </form>
+        {errorMsg && (
+          <p className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">{errorMsg}</p>
+        )}
+
+        <button
+          type="submit"
+          disabled={!stripe || submitting}
+          className="w-full bg-black text-white rounded-full py-3.5 font-medium hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+        >
+          {submitting ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : (
+            <Lock size={16} />
+          )}
+          {submitting ? 'Traitement…' : `Payer ${formatPrice(amount, currency)}`}
+        </button>
+
+        <p className="text-center text-xs text-neutral-400">
+          Paiement sécurisé · Propulsé par Stripe
+        </p>
+      </form>
+    </div>
   );
 }
 
@@ -123,6 +202,7 @@ export default function CheckoutPage() {
   const [stripePromise, setStripePromise] = useState(null);
   const [clientSecret, setClientSecret] = useState('');
   const [intentAmount, setIntentAmount] = useState(0);
+  const [orderId, setOrderId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -158,6 +238,7 @@ export default function CheckoutPage() {
       );
       setClientSecret(intent.client_secret);
       setIntentAmount(intent.amount);
+      if (intent.order_id) setOrderId(intent.order_id);
     } catch (err) {
       setError(err.message || 'Erreur de paiement');
     } finally {
@@ -263,6 +344,8 @@ export default function CheckoutPage() {
               currency={currency}
               slug={slug}
               lang={lang}
+              clientSecret={clientSecret}
+              orderId={orderId}
             />
           </Elements>
         ) : null}

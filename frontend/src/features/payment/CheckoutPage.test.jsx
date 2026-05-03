@@ -13,7 +13,16 @@ vi.mock('@stripe/stripe-js', () => ({
 vi.mock('@stripe/react-stripe-js', () => ({
   Elements: ({ children }) => <div data-testid="stripe-elements">{children}</div>,
   PaymentElement: () => <div data-testid="payment-element" />,
-  useStripe: () => ({ confirmPayment: vi.fn() }),
+  PaymentRequestButtonElement: () => <div data-testid="payment-request-button" />,
+  useStripe: () => ({
+    confirmPayment: vi.fn(),
+    confirmCardPayment: vi.fn(),
+    paymentRequest: vi.fn(() => ({
+      canMakePayment: vi.fn(() => Promise.resolve(null)), // returns null → no wallet button shown
+      on: vi.fn(),
+      off: vi.fn(),
+    })),
+  }),
   useElements: () => ({}),
 }));
 

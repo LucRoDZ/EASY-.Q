@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -35,20 +34,18 @@ from app.services.email_service import send_low_nps_email
 from app.core import redis as redis_core
 
 
-# ── Redis session sync helpers (called from sync endpoints in thread pool) ────
-
-def _redis_get_session(session_id: str) -> list:
+async def _redis_get_session(session_id: str) -> list:
     """Load chat messages from Redis (2h TTL). Returns [] on miss or error."""
     try:
-        return asyncio.run(redis_core.get_session(session_id)) or []
+        return await redis_core.get_session(session_id) or []
     except Exception:
         return []
 
 
-def _redis_save_session(session_id: str, messages: list) -> None:
+async def _redis_save_session(session_id: str, messages: list) -> None:
     """Persist chat messages to Redis (2h TTL). Best-effort — never raises."""
     try:
-        asyncio.run(redis_core.set_session(session_id, messages[-20:]))
+        await redis_core.set_session(session_id, messages[-20:])
     except Exception:
         pass
 
@@ -56,10 +53,10 @@ router = APIRouter(prefix="/api/public", tags=["public"])
 
 
 @router.get("/menus/{slug}", response_model=PublicMenuResponse)
-def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get_db)):
+async def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get_db)):
     # Check Redis cache first (5-min TTL)
     try:
-        cached = asyncio.run(redis_core.get_menu_cache(slug, lang))
+        cached = await redis_core.get_menu_cache(slug, lang)
         if cached:
             return PublicMenuResponse(**cached)
     except Exception:
@@ -73,7 +70,7 @@ def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get_db)):
 
     # Store in cache for future requests
     try:
-        asyncio.run(redis_core.set_menu_cache(slug, data, lang))
+        await redis_core.set_menu_cache(slug, data, lang)
     except Exception:
         pass
 
@@ -103,7 +100,7 @@ def delete_conversation(slug: str, session_id: str, db: Session = Depends(get_db
 
 
 @router.post("/menus/{slug}/chat", response_model=ChatResponse)
-def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(get_db)):
+async def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(get_db)):
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -121,7 +118,7 @@ def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(get_db
     # Load session history from Redis (fast, TTL 2h) and merge with request
     session_messages = request.messages
     if request.session_id:
-        redis_messages = _redis_get_session(request.session_id)
+        redis_messages = await _redis_get_session(request.session_id)
         if redis_messages:
             session_messages = redis_messages
 
@@ -160,7 +157,7 @@ def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(get_db
 
         # Broadcast new order to Redis pub/sub for KDS
         try:
-            asyncio.run(redis_core.publish_order_event(
+            await redis_core.publish_order_event(
                 menu.slug,
                 {
                     "type": "new_order",
@@ -169,7 +166,7 @@ def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(get_db
                     "items": items,
                     "status": "pending",
                 },
-            ))
+            )
         except Exception:
             pass  # Best-effort — KDS may not be connected
 
@@ -192,14 +189,14 @@ def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(get_db
 
         messages_to_save = session_messages + [assistant_message]
         # Save to Redis (primary — 2h TTL) and DB (secondary — durable)
-        _redis_save_session(request.session_id, messages_to_save)
+        await _redis_save_session(request.session_id, messages_to_save)
         save_conversation_messages(db, menu.id, request.session_id, messages_to_save)
 
     return ChatResponse(answer=answer, order_id=order_id)
 
 
 @router.post("/menus/{slug}/chat/stream")
-def chat_with_menu_stream(
+async def chat_with_menu_stream(
     slug: str, request: ChatRequest, db: Session = Depends(get_db)
 ):
     """Streaming chat endpoint using Server-Sent Events."""
@@ -220,13 +217,13 @@ def chat_with_menu_stream(
     # Load session history from Redis (fast, TTL 2h) and use as conversation context
     session_messages = request.messages
     if request.session_id:
-        redis_messages = _redis_get_session(request.session_id)
+        redis_messages = await _redis_get_session(request.session_id)
         if redis_messages:
             session_messages = redis_messages
 
     collected_response = []
 
-    def generate():
+    async def generate():
         try:
             for chunk in chat_about_menu_stream(full_data, lang, session_messages):
                 collected_response.append(chunk)
@@ -249,7 +246,7 @@ def chat_with_menu_stream(
 
                 messages_to_save = session_messages + [assistant_message]
                 # Save to Redis (primary — 2h TTL) and DB (secondary — durable)
-                _redis_save_session(request.session_id, messages_to_save)
+                await _redis_save_session(request.session_id, messages_to_save)
                 save_conversation_messages(
                     db, menu.id, request.session_id, messages_to_save
                 )

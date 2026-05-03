@@ -239,45 +239,53 @@ export const api = {
     return res.json();
   },
 
-  // Admin backoffice
-  async getAdminStats() {
-    const res = await fetch(`${API_BASE}/api/v1/admin/stats`);
+  // Admin backoffice — all methods require a Clerk Bearer token
+  async getAdminStats(token) {
+    const res = await fetch(`${API_BASE}/api/v1/admin/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (!res.ok) throw new Error('Failed to load admin stats');
     return res.json();
   },
 
-  async getAdminRestaurants(params = {}) {
+  async getAdminRestaurants(token, params = {}) {
     const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
-    const res = await fetch(`${API_BASE}/api/v1/admin/restaurants${qs ? `?${qs}` : ''}`);
+    const res = await fetch(`${API_BASE}/api/v1/admin/restaurants${qs ? `?${qs}` : ''}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (!res.ok) throw new Error('Failed to load restaurants');
     return res.json();
   },
 
-  async patchAdminRestaurantStatus(slug, status) {
+  async patchAdminRestaurantStatus(slug, status, token) {
     const res = await fetch(`${API_BASE}/api/v1/admin/restaurants/${slug}/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ status }),
     });
     if (!res.ok) throw new Error('Failed to update restaurant status');
     return res.json();
   },
 
-  async getAdminSubscriptions(params = {}) {
+  async getAdminSubscriptions(token, params = {}) {
     const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
-    const res = await fetch(`${API_BASE}/api/v1/admin/subscriptions${qs ? `?${qs}` : ''}`);
+    const res = await fetch(`${API_BASE}/api/v1/admin/subscriptions${qs ? `?${qs}` : ''}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (!res.ok) throw new Error('Failed to load subscriptions');
     return res.json();
   },
 
-  async getAdminAuditLogs({ action, resource_type, resource_id, limit = 50, offset = 0 } = {}) {
+  async getAdminAuditLogs(token, { action, resource_type, resource_id, limit = 50, offset = 0 } = {}) {
     const params = new URLSearchParams();
     if (action) params.set('action', action);
     if (resource_type) params.set('resource_type', resource_type);
     if (resource_id) params.set('resource_id', resource_id);
     params.set('limit', limit);
     params.set('offset', offset);
-    const res = await fetch(`${API_BASE}/api/v1/admin/audit-logs?${params}`);
+    const res = await fetch(`${API_BASE}/api/v1/admin/audit-logs?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (!res.ok) throw new Error('Failed to load audit logs');
     return res.json();
   },
@@ -429,7 +437,7 @@ export const api = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Payment intent failed (${res.status})`);
     }
-    return res.json(); // { client_secret, payment_intent_id, amount, currency, split_total, split_persons }
+    return res.json(); // { client_secret, payment_intent_id, amount, currency, order_id, split_total, split_persons }
   },
 
   // Waiter call
@@ -465,42 +473,6 @@ export const api = {
     return res.json();
   },
 
-  // Admin backoffice
-  async adminStats(token) {
-    const res = await fetch(`${API_BASE}/api/v1/admin/stats`, {
-      headers: { 'X-Admin-Token': token },
-    });
-    if (!res.ok) throw new Error(`Admin stats failed (${res.status})`);
-    return res.json();
-  },
-
-  async adminRestaurants(token, params = {}) {
-    const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${API_BASE}/api/v1/admin/restaurants${qs ? `?${qs}` : ''}`, {
-      headers: { 'X-Admin-Token': token },
-    });
-    if (!res.ok) throw new Error(`Admin restaurants failed (${res.status})`);
-    return res.json();
-  },
-
-  async adminSubscriptions(token, params = {}) {
-    const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${API_BASE}/api/v1/admin/subscriptions${qs ? `?${qs}` : ''}`, {
-      headers: { 'X-Admin-Token': token },
-    });
-    if (!res.ok) throw new Error(`Admin subscriptions failed (${res.status})`);
-    return res.json();
-  },
-
-  async adminAuditLogs(token, params = {}) {
-    const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${API_BASE}/api/v1/admin/audit-logs${qs ? `?${qs}` : ''}`, {
-      headers: { 'X-Admin-Token': token },
-    });
-    if (!res.ok) throw new Error(`Admin audit logs failed (${res.status})`);
-    return res.json();
-  },
-
   // Generic helpers used by TranslatorPage and others
   async get(url) {
     const res = await fetch(`${API_BASE}${url}`);
@@ -517,6 +489,19 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `PATCH ${url} failed (${res.status})`);
+    }
+    return { data: await res.json() };
+  },
+
+  async post(url, body) {
+    const res = await fetch(`${API_BASE}${url}`, {
+      method: 'POST',
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `POST ${url} failed (${res.status})`);
     }
     return { data: await res.json() };
   },

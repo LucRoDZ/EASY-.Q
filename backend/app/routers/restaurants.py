@@ -7,6 +7,7 @@ Routes (prefix /api/v1/restaurants):
 """
 
 import io
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -15,11 +16,13 @@ from sqlalchemy.orm import Session
 
 from pydantic import BaseModel
 
-from app.config import BASE_URL, STORAGE_DIR
+from app.config import BASE_URL, GOOGLE_API_KEY, STORAGE_DIR
 from app.core import storage as r2
 from app.db import get_db
 from app.models import AuditLog, Menu, RestaurantProfile
 from app.schemas import LogoUploadResponse, RestaurantProfileResponse, RestaurantProfileUpdate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/restaurants", tags=["restaurants"])
 
@@ -94,6 +97,7 @@ def _to_response(p: RestaurantProfile) -> RestaurantProfileResponse:
         timezone=p.timezone,
         social_links=p.social_links,
         google_place_id=p.google_place_id,
+        stripe_account_id=getattr(p, "stripe_account_id", None),
     )
 
 
@@ -236,5 +240,57 @@ def complete_onboarding(
             send_welcome_email(to=body.owner_email, restaurant_name=body.restaurant_name)
         except Exception:
             pass  # Non-critical — don't fail onboarding if email fails
+
+
+# ---------------------------------------------------------------------------
+# GET /{slug}/google-rating
+# ---------------------------------------------------------------------------
+
+_GOOGLE_RATING_CACHE: dict = {}  # {place_id: {"rating": float, "total": int, "cached_at": float}}
+
+
+@router.get("/{slug}/google-rating")
+def get_google_rating(slug: str, db: Session = Depends(get_db)) -> dict:
+    """Return Google Places rating for the restaurant. Cached for 1 hour.
+
+    Returns {"rating": float, "user_ratings_total": int} or {} if not configured.
+    """
+    import time
+
+    profile = db.query(RestaurantProfile).filter(RestaurantProfile.slug == slug).first()
+    if not profile or not profile.google_place_id:
+        return {}
+
+    place_id = profile.google_place_id
+    now = time.time()
+    cached = _GOOGLE_RATING_CACHE.get(place_id)
+    if cached and (now - cached["cached_at"]) < 3600:
+        return {"rating": cached["rating"], "user_ratings_total": cached["total"], "place_id": place_id}
+
+    if not GOOGLE_API_KEY:
+        return {}
+
+    try:
+        import requests as _requests
+        resp = _requests.get(
+            "https://maps.googleapis.com/maps/api/place/details/json",
+            params={
+                "place_id": place_id,
+                "fields": "rating,user_ratings_total",
+                "key": GOOGLE_API_KEY,
+            },
+            timeout=5.0,
+        )
+        data = resp.json()
+        result = data.get("result", {})
+        rating = result.get("rating")
+        total = result.get("user_ratings_total")
+        if rating is None:
+            return {}
+        _GOOGLE_RATING_CACHE[place_id] = {"rating": rating, "total": total or 0, "cached_at": now}
+        return {"rating": rating, "user_ratings_total": total or 0, "place_id": place_id}
+    except Exception as exc:
+        logger.warning("Google Places rating fetch failed for %s: %s", place_id, exc)
+        return {}
 
     return {"ok": True}

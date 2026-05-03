@@ -65,7 +65,9 @@ function CategoryNav({ sections, activeIndex }) {
 export default function MenuPage() {
   const { slug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { itemCount } = useCart();
+  const { itemCount, setSlug } = useCart();
+
+  useEffect(() => { setSlug(slug); }, [slug, setSlug]);
 
   const lang = searchParams.get('lang') || 'fr';
   const tableToken = searchParams.get('table') || '';
@@ -74,6 +76,7 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeSection, setActiveSection] = useState(0);
+  const [googleRating, setGoogleRating] = useState(null);
 
   // Waiter call state (header bell — kept for mobile UX; WaiterCallButton FAB added separately)
   const [waiterState, setWaiterState] = useState('idle'); // 'idle' | 'loading' | 'sent' | 'error'
@@ -123,6 +126,15 @@ export default function MenuPage() {
       .catch(() => setError('Menu introuvable'))
       .finally(() => setLoading(false));
   }, [slug, lang]);
+
+  // Fetch Google Places rating (best-effort, shown only if place_id is configured)
+  useEffect(() => {
+    if (!slug) return;
+    fetch(`/api/v1/restaurants/${slug}/google-rating`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.rating) setGoogleRating(data); })
+      .catch(() => {});
+  }, [slug]);
 
   // ── IntersectionObserver for CategoryNav active state ──────────────────────
 
@@ -211,11 +223,28 @@ export default function MenuPage() {
             <h1 className="text-xl font-semibold tracking-tight truncate">
               {menu.restaurant_name}
             </h1>
-            {tableToken && (
-              <p className="text-xs text-neutral-400 leading-none mt-0.5">
-                Table {tableToken.length > 8 ? tableToken.slice(0, 8) + '…' : tableToken}
-              </p>
-            )}
+            <div className="flex items-center gap-2 mt-0.5">
+              {googleRating && (
+                <a
+                  href={`https://search.google.com/local/writereview?placeid=${encodeURIComponent(googleRating.place_id || '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
+                  title="Avis Google"
+                >
+                  <span>★</span>
+                  <span className="font-medium">{googleRating.rating.toFixed(1)}</span>
+                  {googleRating.user_ratings_total > 0 && (
+                    <span className="text-neutral-400">({googleRating.user_ratings_total})</span>
+                  )}
+                </a>
+              )}
+              {tableToken && (
+                <p className="text-xs text-neutral-400 leading-none">
+                  Table {tableToken.length > 8 ? tableToken.slice(0, 8) + '…' : tableToken}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">

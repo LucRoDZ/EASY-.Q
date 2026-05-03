@@ -96,6 +96,7 @@ class RestaurantProfile(Base):
     timezone = Column(String(100), nullable=True, default="Europe/Paris")
     social_links = Column(JSON, nullable=True)   # {"instagram": url, "facebook": url, "google_maps": url}
     google_place_id = Column(String(255), nullable=True)  # Google Maps Place ID for Google Review CTA
+    stripe_account_id = Column(String(255), nullable=True)  # Stripe Connect account ID (acct_...)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

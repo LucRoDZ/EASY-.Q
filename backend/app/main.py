@@ -97,7 +97,6 @@ async def lifespan(app: FastAPI):
 
 
 ensure_dirs()
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="EASY.Q",

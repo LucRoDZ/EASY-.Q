@@ -1,14 +1,18 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 
 const CartContext = createContext();
 
-const STORAGE_KEY = 'easyq_cart';
 const CHANNEL_NAME = 'easyq-cart';
 
+function storageKey(slug) {
+  return slug ? `easyq_cart_${slug}` : 'easyq_cart';
+}
+
 export function CartProvider({ children }) {
+  const slugRef = useRef(null);
   const [items, setItems] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(storageKey(null));
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -26,7 +30,7 @@ export function CartProvider({ children }) {
     channelRef.current = ch;
 
     ch.onmessage = (event) => {
-      if (event.data?.type === 'CART_UPDATE') {
+      if (event.data?.type === 'CART_UPDATE' && event.data.slug === slugRef.current) {
         suppressRef.current = true;
         setItems(event.data.items ?? []);
         suppressRef.current = false;
@@ -38,11 +42,24 @@ export function CartProvider({ children }) {
 
   // Persist to localStorage and broadcast on change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    const key = storageKey(slugRef.current);
+    localStorage.setItem(key, JSON.stringify(items));
     if (channelRef.current && !suppressRef.current) {
-      channelRef.current.postMessage({ type: 'CART_UPDATE', items });
+      channelRef.current.postMessage({ type: 'CART_UPDATE', slug: slugRef.current, items });
     }
   }, [items]);
+
+  // Called by menu/cart pages to scope the cart to the current restaurant
+  const setSlug = useCallback((slug) => {
+    if (slugRef.current === slug) return;
+    slugRef.current = slug;
+    try {
+      const saved = localStorage.getItem(storageKey(slug));
+      setItems(saved ? JSON.parse(saved) : []);
+    } catch {
+      setItems([]);
+    }
+  }, []);
 
   const addItem = (nameOrItem, priceArg) => {
     let name, price;
@@ -97,7 +114,7 @@ export function CartProvider({ children }) {
 
   return (
     <CartContext.Provider
-      value={{ items, addItem, removeItem, updateQuantity, clearCart, total, itemCount }}
+      value={{ items, addItem, removeItem, updateQuantity, clearCart, total, itemCount, setSlug }}
     >
       {children}
     </CartContext.Provider>

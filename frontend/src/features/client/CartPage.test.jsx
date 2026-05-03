@@ -14,9 +14,9 @@ beforeEach(() => {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function renderCartPage(initialCart = []) {
-  // Pre-seed localStorage so CartProvider hydrates with items
+  // Pre-seed localStorage so CartPage's setSlug('le-bistrot') picks it up
   if (initialCart.length > 0) {
-    localStorage.setItem('easyq_cart', JSON.stringify(initialCart));
+    localStorage.setItem('easyq_cart_le-bistrot', JSON.stringify(initialCart));
   }
 
   return render(

@@ -270,6 +270,7 @@ class RestaurantProfileUpdate(BaseModel):
     timezone: Optional[str] = None
     social_links: Optional[dict] = None   # {instagram, facebook, google_maps}
     google_place_id: Optional[str] = None  # Google Maps Place ID for Google Review CTA
+    stripe_account_id: Optional[str] = None  # Stripe Connect account ID (acct_...)
 
 
 class RestaurantProfileResponse(BaseModel):
@@ -283,6 +284,7 @@ class RestaurantProfileResponse(BaseModel):
     timezone: Optional[str] = None
     social_links: Optional[dict] = None
     google_place_id: Optional[str] = None
+    stripe_account_id: Optional[str] = None
 
 
 class LogoUploadResponse(BaseModel):
@@ -333,6 +335,7 @@ class PaymentIntentResponse(BaseModel):
     payment_intent_id: str
     amount: int
     currency: str
+    order_id: Optional[int] = None  # Scan & Go: order created at intent time
 
 
 # ---------------------------------------------------------------------------

@@ -33,17 +33,11 @@ router = APIRouter(prefix="/api/v1/subscriptions", tags=["subscriptions"])
 
 
 def require_pro(restaurant_id: str, db: Session) -> None:
-    """Raise HTTP 402 only when a subscription explicitly exists on a non-Pro plan.
-
-    If no subscription record exists yet (e.g. new account, dev/test environment),
-    the request is allowed through — enforcement kicks in once billing is set up.
-    """
+    """Raise HTTP 402 unless the restaurant has an active Pro subscription."""
     sub = db.query(Subscription).filter(
         Subscription.restaurant_id == restaurant_id
     ).first()
-    if sub is None:
-        return  # No subscription yet → allow (trial / dev / test)
-    if sub.plan != "pro" or sub.status not in ("active", "trialing"):
+    if sub is None or sub.plan != "pro" or sub.status not in ("active", "trialing"):
         raise HTTPException(
             status_code=402,
             detail={

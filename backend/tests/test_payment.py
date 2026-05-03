@@ -16,7 +16,16 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.db import Base, get_db
-from app.models import Payment, AuditLog, Menu
+from app.models import Payment, AuditLog, Menu, Subscription
+
+
+def _seed_pro_sub(test_db, slug: str) -> None:
+    """Insert an active Pro subscription for the given restaurant slug."""
+    session = test_db()
+    sub = Subscription(restaurant_id=slug, plan="pro", status="active")
+    session.add(sub)
+    session.commit()
+    session.close()
 
 
 # ---------------------------------------------------------------------------
@@ -97,9 +106,10 @@ def test_get_stripe_config_returns_key(client, monkeypatch):
 # POST /api/v1/payments/intent
 # ---------------------------------------------------------------------------
 
-def test_create_payment_intent_returns_client_secret(client, monkeypatch):
+def test_create_payment_intent_returns_client_secret(client, monkeypatch, test_db):
     """POST /intent creates a Stripe PaymentIntent and returns client_secret."""
     monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "le-bistrot")
 
     with patch("stripe.PaymentIntent.create", return_value=_FakePI()) as mock_create:
         resp = client.post(
@@ -121,9 +131,10 @@ def test_create_payment_intent_returns_client_secret(client, monkeypatch):
     assert body["currency"] == "eur"
 
 
-def test_create_payment_intent_includes_tip(client, monkeypatch):
+def test_create_payment_intent_includes_tip(client, monkeypatch, test_db):
     """Tip is added to the total amount."""
     monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "test")
 
     with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
         resp = client.post(
@@ -141,9 +152,10 @@ def test_create_payment_intent_includes_tip(client, monkeypatch):
     assert body["amount"] == 1150  # 10.00 + 1.50 = 11.50 → 1150 cents
 
 
-def test_create_payment_intent_below_minimum_returns_400(client, monkeypatch):
+def test_create_payment_intent_below_minimum_returns_400(client, monkeypatch, test_db):
     """Amount < 0.50 EUR returns 400."""
     monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "test")
 
     resp = client.post(
         "/api/v1/payments/intent",
@@ -177,6 +189,7 @@ def test_create_payment_intent_no_stripe_key_returns_503(client, monkeypatch):
 def test_create_payment_intent_persists_to_db(client, monkeypatch, test_db):
     """A Payment record is saved in the DB after creating an intent."""
     monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "my-restaurant")
 
     with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
         client.post(
@@ -203,6 +216,7 @@ def test_create_payment_intent_persists_to_db(client, monkeypatch, test_db):
 def test_create_payment_intent_with_tip_stores_tip_amount(client, monkeypatch, test_db):
     """tip_amount is stored in the Payment record (in cents)."""
     monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "tipping-test")
 
     with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
         client.post(
@@ -394,9 +408,10 @@ def test_submit_feedback_unknown_menu_still_succeeds(client):
 # POST /api/v1/payments/intent — error + plan-gating coverage
 # ---------------------------------------------------------------------------
 
-def test_create_payment_intent_stripe_error_returns_502(client, monkeypatch):
+def test_create_payment_intent_stripe_error_returns_502(client, monkeypatch, test_db):
     """When Stripe raises StripeError, the endpoint returns 502."""
     monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "error-test")
 
     with patch("stripe.PaymentIntent.create", side_effect=stripe.StripeError("card_error")):
         resp = client.post(
@@ -559,4 +574,162 @@ def test_download_receipt_success_returns_pdf(client, test_db):
     assert resp.headers["content-type"] == "application/pdf"
     # PDF magic bytes
     assert resp.content[:4] == b"%PDF"
+
+
+# ---------------------------------------------------------------------------
+# Stripe Connect — transfer_data + application_fee_amount
+# ---------------------------------------------------------------------------
+
+def test_create_payment_intent_returns_order_id(client, monkeypatch, test_db):
+    """POST /intent now returns order_id — the Order created alongside the Payment."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "connect-test")
+
+    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
+        resp = client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "connect-test",
+                "items": [{"name": "Burger", "price": 14.0, "quantity": 1}],
+                "tip_amount": 0,
+                "currency": "eur",
+                "table_token": None,
+            },
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "order_id" in body
+    assert isinstance(body["order_id"], int)
+    assert body["order_id"] > 0
+
+
+def test_create_payment_intent_no_table_assigns_pickup_number(client, monkeypatch, test_db):
+    """POST /intent with table_token=null → order gets a pickup_number (Scan & Go)."""
+    from app.models import Order
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "scan-go-test")
+
+    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
+        resp = client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "scan-go-test",
+                "items": [{"name": "Frites", "price": 4.0, "quantity": 1}],
+                "tip_amount": 0,
+                "currency": "eur",
+                "table_token": None,
+            },
+        )
+
+    assert resp.status_code == 200
+    order_id = resp.json()["order_id"]
+
+    session = test_db()
+    order = session.query(Order).filter(Order.id == order_id).first()
+    session.close()
+
+    assert order is not None
+    assert order.pickup_number is not None
+    assert order.pickup_number == 1  # first order today
+    assert order.table_token is None
+
+
+def test_create_payment_intent_with_table_no_pickup_number(client, monkeypatch, test_db):
+    """POST /intent with table_token → order has no pickup_number (dine-in)."""
+    from app.models import Order
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "dine-in-test")
+
+    with patch("stripe.PaymentIntent.create", return_value=_FakePI()):
+        resp = client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "dine-in-test",
+                "items": [{"name": "Pizza", "price": 12.0, "quantity": 1}],
+                "tip_amount": 0,
+                "currency": "eur",
+                "table_token": "tok_dine_123",
+            },
+        )
+
+    assert resp.status_code == 200
+    order_id = resp.json()["order_id"]
+
+    session = test_db()
+    order = session.query(Order).filter(Order.id == order_id).first()
+    session.close()
+
+    assert order.pickup_number is None
+    assert order.table_token == "tok_dine_123"
+
+
+def test_create_payment_intent_stripe_connect_adds_transfer_data(client, monkeypatch, test_db):
+    """When restaurant has stripe_account_id, PaymentIntent includes transfer_data."""
+    from app.models import RestaurantProfile
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    monkeypatch.setattr("app.routers.payments.STRIPE_PLATFORM_FEE_PERCENT", 0.03)
+    _seed_pro_sub(test_db, "connected-restaurant")
+
+    # Seed a RestaurantProfile with stripe_account_id
+    session = test_db()
+    profile = RestaurantProfile(
+        slug="connected-restaurant",
+        name="Connected",
+        stripe_account_id="acct_test_123",
+    )
+    session.add(profile)
+    session.commit()
+    session.close()
+
+    captured = {}
+    original_create = _FakePI
+
+    def fake_create(**kwargs):
+        captured.update(kwargs)
+        return _FakePI()
+
+    with patch("stripe.PaymentIntent.create", side_effect=fake_create):
+        client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "connected-restaurant",
+                "items": [{"name": "Steak", "price": 20.0, "quantity": 1}],
+                "tip_amount": 0,
+                "currency": "eur",
+                "table_token": None,
+            },
+        )
+
+    assert "transfer_data" in captured
+    assert captured["transfer_data"]["destination"] == "acct_test_123"
+    assert "application_fee_amount" in captured
+    assert captured["application_fee_amount"] == 60  # 3% of 2000 cents = 60
+
+
+def test_create_payment_intent_no_stripe_account_no_transfer(client, monkeypatch, test_db):
+    """When restaurant has no stripe_account_id, PaymentIntent has no transfer_data."""
+    monkeypatch.setattr("app.routers.payments.STRIPE_SECRET_KEY", "sk_test_abc")
+    _seed_pro_sub(test_db, "plain-restaurant")
+
+    captured = {}
+
+    def fake_create(**kwargs):
+        captured.update(kwargs)
+        return _FakePI()
+
+    with patch("stripe.PaymentIntent.create", side_effect=fake_create):
+        client.post(
+            "/api/v1/payments/intent",
+            json={
+                "slug": "plain-restaurant",
+                "items": [{"name": "Salad", "price": 8.0, "quantity": 1}],
+                "tip_amount": 0,
+                "currency": "eur",
+                "table_token": None,
+            },
+        )
+
+    assert "transfer_data" not in captured
+    assert "application_fee_amount" not in captured
 

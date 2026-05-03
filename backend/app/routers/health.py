@@ -2,6 +2,7 @@
 
 import logging
 from fastapi import APIRouter, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.db import engine
@@ -84,6 +85,6 @@ async def health_check():
     # Set overall status
     if not all_healthy:
         health_status["status"] = "degraded"
-        return health_status
+        return JSONResponse(status_code=503, content=health_status)
 
     return health_status

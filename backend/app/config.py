@@ -31,6 +31,7 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRO_PRICE_ID = os.getenv("STRIPE_PRO_PRICE_ID", "")  # Stripe Price ID for Pro plan (49€/month)
 STRIPE_BILLING_WEBHOOK_SECRET = os.getenv("STRIPE_BILLING_WEBHOOK_SECRET", "")
+STRIPE_PLATFORM_FEE_PERCENT = float(os.getenv("STRIPE_PLATFORM_FEE_PERCENT", "0.03"))  # 3% platform fee
 
 # CORS and Frontend
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")

@@ -54,7 +54,7 @@ def get_admin_stats(db: Session = Depends(get_db), _: dict = Depends(require_adm
     total_restaurants = db.query(func.count(Menu.id)).scalar() or 0
     active_restaurants = (
         db.query(func.count(Menu.id))
-        .filter(Menu.status == "active")
+        .filter(Menu.publish_status == "published")
         .scalar()
         or 0
     )
