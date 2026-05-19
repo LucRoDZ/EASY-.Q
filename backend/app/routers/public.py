@@ -6,8 +6,6 @@ from fastapi.responses import StreamingResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
-
-limiter = Limiter(key_func=get_remote_address)
 from app.db import get_db
 from app.schemas import (
     PublicMenuResponse,
@@ -26,7 +24,6 @@ from app.services.menu_service import (
 from app.services.chat_service import (
     chat_about_menu_stream,
     chat_about_menu_with_order,
-    MODEL,
 )
 from app.services.conversation_service import (
     get_conversation_messages,
@@ -35,6 +32,8 @@ from app.services.conversation_service import (
 )
 from app.services.email_service import send_low_nps_email
 from app.core import redis as redis_core
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 async def _redis_get_session(session_id: str) -> list:

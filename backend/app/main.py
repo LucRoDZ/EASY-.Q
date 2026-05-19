@@ -9,7 +9,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
-from app.db import engine, Base
 from app.routers import menu, public, dashboard
 from app.routers.auth import router as auth_router
 from app.routers.menu import router_v1 as menu_router_v1
