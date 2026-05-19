@@ -23,26 +23,14 @@ from app.routers.analytics import router as analytics_router
 from app.routers.admin import router as admin_router
 from app.routers.subscriptions import router as subscriptions_router
 from app.services.file_service import ensure_dirs
-from app.config import STORAGE_DIR, CORS_ORIGINS, FRONTEND_URL, SENTRY_DSN
+from app.config import (
+    CLERK_WEBHOOK_SECRET, CORS_ORIGINS, FRONTEND_URL, IS_PRODUCTION,
+    KDS_SECRET_TOKEN, STORAGE_DIR,
+)
 from app.core import redis as redis_core
-
-# ---------------------------------------------------------------------------
-# Sentry error tracking (optional — enabled only when SENTRY_DSN is set)
-# ---------------------------------------------------------------------------
-if SENTRY_DSN:
-    try:
-        import sentry_sdk
-        from sentry_sdk.integrations.fastapi import FastApiIntegration
-        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-
-        sentry_sdk.init(
-            dsn=SENTRY_DSN,
-            integrations=[FastApiIntegration(), SqlalchemyIntegration()],
-            traces_sample_rate=0.1,  # 10% of requests for performance monitoring
-            send_default_pii=False,   # GDPR: no PII in Sentry
-        )
-    except ImportError:
-        pass  # sentry-sdk not installed
+from app.routers.public import limiter as chat_limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +62,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if IS_PRODUCTION:
+        if KDS_SECRET_TOKEN == "kds-dev-token-change-in-production":
+            logger.warning("SECURITY: KDS_SECRET_TOKEN is using the default dev value in production!")
+        if not CLERK_WEBHOOK_SECRET:
+            logger.warning("SECURITY: CLERK_WEBHOOK_SECRET is not set — webhook signatures will not be verified!")
+
     await redis_core.init_redis()
 
     # Start KDS Redis pub/sub subscriber (best-effort — no-op if Redis is down)
@@ -105,11 +99,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = chat_limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -119,6 +116,18 @@ app.mount("/storage", StaticFiles(directory=STORAGE_DIR), name="storage")
 # ---------------------------------------------------------------------------
 # Request ID + slow query middleware
 # ---------------------------------------------------------------------------
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if IS_PRODUCTION:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 
 @app.middleware("http")
 async def add_request_id_and_log(request: Request, call_next):

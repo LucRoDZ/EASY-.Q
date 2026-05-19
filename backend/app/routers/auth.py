@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import logging
+import time
 from base64 import b64decode
 
 import requests as _requests
@@ -65,12 +66,15 @@ def _extract_bearer(authorization: str | None) -> str:
 # ---------------------------------------------------------------------------
 
 _jwks_cache: dict | None = None
+_jwks_cache_at: float = 0.0
+_JWKS_TTL = 86400.0  # 24 hours
 
 
 def _get_jwks() -> dict:
-    """Fetch Clerk JWKS (cached in memory for the process lifetime)."""
-    global _jwks_cache
-    if _jwks_cache is not None:
+    """Fetch Clerk JWKS (cached for 24 h; refreshed on TTL expiry)."""
+    global _jwks_cache, _jwks_cache_at
+    now = time.time()
+    if _jwks_cache is not None and (now - _jwks_cache_at) < _JWKS_TTL:
         return _jwks_cache
     if not CLERK_JWKS_URL:
         raise HTTPException(status_code=500, detail="CLERK_JWKS_URL not configured")
@@ -78,6 +82,7 @@ def _get_jwks() -> dict:
         resp = _requests.get(CLERK_JWKS_URL, timeout=5)
         resp.raise_for_status()
         _jwks_cache = resp.json()
+        _jwks_cache_at = now
         return _jwks_cache
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch JWKS: {exc}")
@@ -140,6 +145,15 @@ def require_admin(authorization: str | None = Header(None)) -> dict:
     return payload
 
 
+def require_authenticated_user(authorization: str | None = Header(None)) -> dict:
+    """FastAPI dependency — raises 401 unless the caller presents a valid Clerk JWT."""
+    token = _extract_bearer(authorization)
+    payload = _verify_jwt(token)
+    if not payload.get("sub"):
+        raise HTTPException(status_code=401, detail="Token missing sub claim")
+    return payload
+
+
 # ---------------------------------------------------------------------------
 # GET /me
 # ---------------------------------------------------------------------------
@@ -157,7 +171,7 @@ def get_current_user(
     setups should add Clerk JWKS verification middleware.
     """
     token = _extract_bearer(authorization)
-    payload = _decode_jwt_payload(token)
+    payload = _verify_jwt(token)  # full RS256 signature check via Clerk JWKS
 
     user_id = payload.get("sub")
     if not user_id:

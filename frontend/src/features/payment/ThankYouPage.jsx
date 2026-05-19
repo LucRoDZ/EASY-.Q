@@ -105,6 +105,8 @@ function NPSSurvey({ slug, lang, paymentIntentId, googlePlaceId }) {
           <button
             key={n}
             onClick={() => setScore(n)}
+            aria-label={`${n} / 10`}
+            aria-pressed={score === n}
             className={`h-10 rounded-lg text-sm font-semibold border transition-colors ${
               score === n
                 ? 'bg-black text-white border-black'
@@ -122,7 +124,9 @@ function NPSSurvey({ slug, lang, paymentIntentId, googlePlaceId }) {
       </div>
 
       {/* Comment */}
+      <label htmlFor="nps-comment" className="sr-only">{t.placeholder}</label>
       <textarea
+        id="nps-comment"
         value={comment}
         onChange={(e) => setComment(e.target.value)}
         placeholder={t.placeholder}
@@ -233,7 +237,7 @@ export default function ThankYouPage() {
   const t = labels[lang] || labels.fr;
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-xl mx-auto px-4 h-14 flex items-center gap-3">

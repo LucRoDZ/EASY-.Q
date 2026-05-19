@@ -121,7 +121,7 @@ def list_restaurants(
 
 @router.patch("/restaurants/{slug}/status")
 def update_restaurant_status(
-    slug: str, body: dict, db: Session = Depends(get_db), _: dict = Depends(require_admin)
+    slug: str, body: dict, db: Session = Depends(get_db), current_admin: dict = Depends(require_admin)
 ):
     """Publish or unpublish a restaurant menu (sets Menu.publish_status)."""
     new_status = body.get("status")
@@ -142,7 +142,7 @@ def update_restaurant_status(
     # Log the action
     log = AuditLog(
         actor_type="admin",
-        actor_id="superadmin",
+        actor_id=current_admin.get("sub", "unknown"),
         action=f"restaurant.{publish_status}",
         resource_type="menu",
         resource_id=slug,
@@ -219,13 +219,13 @@ def list_audit_logs(
             dt = datetime.fromisoformat(from_date).replace(tzinfo=timezone.utc)
             query = query.filter(AuditLog.created_at >= dt)
         except ValueError:
-            pass
+            raise HTTPException(status_code=400, detail=f"Invalid from date: {from_date!r}. Use ISO 8601.")
     if to_date:
         try:
             dt = datetime.fromisoformat(to_date).replace(tzinfo=timezone.utc)
             query = query.filter(AuditLog.created_at <= dt)
         except ValueError:
-            pass
+            raise HTTPException(status_code=400, detail=f"Invalid to date: {to_date!r}. Use ISO 8601.")
 
     total = query.count()
     logs = query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit).all()

@@ -102,6 +102,7 @@ function AllergenIcon({ code }) {
 
   return (
     <span
+      role="img"
       title={info.title}
       aria-label={info.title}
       className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-neutral-800 text-white shrink-0 cursor-help"

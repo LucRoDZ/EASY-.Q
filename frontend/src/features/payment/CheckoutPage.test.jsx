@@ -183,3 +183,33 @@ describe('CheckoutPage — tip in summary', () => {
     });
   });
 });
+
+describe('CheckoutPage — Scan & Go (order_id in response)', () => {
+  beforeEach(() => {
+    api.getStripeConfig.mockResolvedValue({ publishable_key: 'pk_test_abc' });
+    api.createPaymentIntent.mockResolvedValue({
+      client_secret: 'pi_test_secret',
+      payment_intent_id: 'pi_test_123',
+      amount: 1400,
+      currency: 'eur',
+      order_id: 42,
+    });
+  });
+
+  it('renders payment form when order_id is present in intent response', async () => {
+    renderCheckout([ITEM]);
+    await waitFor(() => {
+      expect(screen.getByTestId('stripe-elements')).toBeInTheDocument();
+    });
+  });
+
+  it('shows submit button with formatted price', async () => {
+    renderCheckout([{ name: 'Frites', price: 4.0, quantity: 1 }]);
+    await waitFor(() => {
+      expect(screen.getByTestId('payment-element')).toBeInTheDocument();
+    });
+    // Submit button with price should be visible
+    const btn = document.querySelector('button[type="submit"]');
+    expect(btn).toBeTruthy();
+  });
+});

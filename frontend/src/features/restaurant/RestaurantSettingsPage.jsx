@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Loader2, Upload, Save, CheckCircle2, AlertCircle, Building2, Mail, MapPin } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
 import { api } from '../../api';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ function TextInput({ value, onChange, placeholder, type = 'text' }) {
 
 // ─── LogoUpload ───────────────────────────────────────────────────────────────
 
-function LogoUpload({ slug, logoUrl, onUploaded }) {
+function LogoUpload({ slug, logoUrl, onUploaded, token }) {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -57,14 +58,15 @@ function LogoUpload({ slug, logoUrl, onUploaded }) {
     setUploading(true);
     setError('');
     try {
-      const { logo_url } = await api.uploadRestaurantLogo(slug, file);
+      const resolvedToken = typeof token === 'function' ? await token() : token;
+      const { logo_url } = await api.uploadRestaurantLogo(slug, file, resolvedToken);
       onUploaded(logo_url);
     } catch (e) {
       setError(e.message || 'Erreur upload');
     } finally {
       setUploading(false);
     }
-  }, [slug, onUploaded]);
+  }, [slug, onUploaded, token]);
 
   const onDrop = useCallback((e) => {
     e.preventDefault();
@@ -202,6 +204,7 @@ function ProfilePreview({ profile }) {
 
 export default function RestaurantSettingsPage() {
   const { slug } = useParams();
+  const { getToken } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -237,6 +240,7 @@ export default function RestaurantSettingsPage() {
     setSaved(false);
     setError('');
     try {
+      const token = await getToken();
       await api.updateRestaurantProfile(slug, {
         name,
         owner_email: ownerEmail || null,
@@ -245,7 +249,7 @@ export default function RestaurantSettingsPage() {
         logo_url: logoUrl,
         opening_hours: hours,
         google_place_id: googlePlaceId || null,
-      });
+      }, token);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
@@ -293,6 +297,7 @@ export default function RestaurantSettingsPage() {
             slug={slug}
             logoUrl={logoUrl}
             onUploaded={(url) => setLogoUrl(url)}
+            token={getToken}
           />
         </section>
 

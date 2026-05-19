@@ -9,9 +9,6 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./serveur_ai.db")
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 STORAGE_DIR = os.getenv("STORAGE_DIR", "./storage")
-LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY", "")
-LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY", "")
-LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # Cloudflare R2 (S3-compatible)
@@ -50,5 +47,4 @@ ADMIN_USER_IDS: list[str] = [
     if uid.strip()
 ]
 
-# Sentry error tracking
-SENTRY_DSN = os.getenv("SENTRY_DSN", "")  # Leave empty to disable Sentry
+IS_PRODUCTION = os.getenv("IS_PRODUCTION", "false").lower() == "true"

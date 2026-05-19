@@ -197,7 +197,7 @@ export default function MenuPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-neutral-50 flex items-center justify-center">
         <Loader2 size={32} className="animate-spin text-neutral-400" />
       </div>
     );
@@ -205,7 +205,7 @@ export default function MenuPage() {
 
   if (error || !menu) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-neutral-50 flex items-center justify-center">
         <p className="text-neutral-600">{error || 'Menu introuvable'}</p>
       </div>
     );
@@ -214,7 +214,7 @@ export default function MenuPage() {
   const cartUrl = `/menu/${slug}/cart?lang=${lang}&currency=${menu.currency || 'EUR'}`;
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-24">
+    <div className="min-h-dvh bg-neutral-50 pb-24">
 
       {/* ── Sticky Header ── */}
       <header className="bg-black text-white sticky top-0 z-40">

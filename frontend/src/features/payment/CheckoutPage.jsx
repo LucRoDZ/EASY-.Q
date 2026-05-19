@@ -162,7 +162,7 @@ function PaymentForm({ amount, currency, slug, lang, clientSecret, orderId }) {
         </div>
 
         {errorMsg && (
-          <p className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">{errorMsg}</p>
+          <p role="alert" className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">{errorMsg}</p>
         )}
 
         <button
@@ -253,7 +253,7 @@ export default function CheckoutPage() {
   const cartUrl = `/menu/${slug}/cart?lang=${lang}&currency=${currency}`;
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-xl mx-auto px-4 h-14 flex items-center gap-4">
@@ -315,7 +315,7 @@ export default function CheckoutPage() {
           </div>
         ) : error ? (
           <div className="space-y-3">
-            <p className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</p>
+            <p role="alert" className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</p>
             <button
               onClick={initialise}
               className="w-full bg-black text-white rounded-full py-3 font-medium hover:bg-neutral-800 transition-colors"

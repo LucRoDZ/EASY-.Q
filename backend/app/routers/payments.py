@@ -280,7 +280,7 @@ async def stripe_webhook(
     return {"received": True}
 
 
-def _broadcast_order_confirmed(
+async def _broadcast_order_confirmed(
     order_id: int,
     menu_slug: str,
     table_token: str | None,
@@ -288,24 +288,21 @@ def _broadcast_order_confirmed(
     pickup_number: int | None,
 ) -> None:
     """Best-effort: broadcast order confirmed event to KDS via Redis."""
-    import asyncio
     from app.core.redis import publish_order_event
     try:
-        asyncio.run(
-            publish_order_event(
-                menu_slug,
-                {
-                    "type": "new_order",
-                    "order": {
-                        "id": order_id,
-                        "menu_slug": menu_slug,
-                        "table_token": table_token,
-                        "items": items,
-                        "status": "confirmed",
-                        "pickup_number": pickup_number,
-                    },
+        await publish_order_event(
+            menu_slug,
+            {
+                "type": "new_order",
+                "order": {
+                    "id": order_id,
+                    "menu_slug": menu_slug,
+                    "table_token": table_token,
+                    "items": items,
+                    "status": "confirmed",
+                    "pickup_number": pickup_number,
                 },
-            )
+            },
         )
     except Exception as exc:
         logger.warning("KDS broadcast failed for order %s: %s", order_id, exc)
@@ -423,9 +420,14 @@ def _build_receipt_pdf(payment: Payment, restaurant_name: str) -> bytes:
 @router.get("/{payment_intent_id}/receipt.pdf")
 def download_receipt(
     payment_intent_id: str,
+    table_token: str | None = None,
     db: Session = Depends(get_db),
 ):
-    """Download a PDF receipt for a succeeded payment."""
+    """Download a PDF receipt for a succeeded payment.
+
+    When the payment is associated with a table, the caller must supply the
+    matching table_token as a query parameter to prove they were at that table.
+    """
     payment = (
         db.query(Payment)
         .filter(Payment.payment_intent_id == payment_intent_id)
@@ -435,6 +437,8 @@ def download_receipt(
         raise HTTPException(status_code=404, detail="Payment not found")
     if payment.status != "succeeded":
         raise HTTPException(status_code=400, detail="Receipt only available for succeeded payments")
+    if payment.table_token and payment.table_token != table_token:
+        raise HTTPException(status_code=403, detail="Invalid table_token for this receipt")
 
     # Look up restaurant name
     profile = (

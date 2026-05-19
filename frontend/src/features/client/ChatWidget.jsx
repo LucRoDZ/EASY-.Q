@@ -230,7 +230,7 @@ export default function ChatWidget({ slug, lang = 'fr', menuItems = [] }) {
 
   return (
     <div
-      className={`fixed ${panelBottom} right-6 w-80 sm:w-96 h-[520px] bg-white rounded-2xl shadow-2xl border border-neutral-200 flex flex-col z-50 overflow-hidden`}
+      className={`fixed ${panelBottom} right-6 w-80 max-w-[calc(100vw-1.5rem)] sm:w-96 h-[520px] bg-white rounded-2xl shadow-2xl border border-neutral-200 flex flex-col z-50 overflow-hidden`}
     >
       {/* Header */}
       <div className="bg-black text-white px-4 py-3 flex items-center justify-between shrink-0">
@@ -244,6 +244,7 @@ export default function ChatWidget({ slug, lang = 'fr', menuItems = [] }) {
           <button
             onClick={handleClearHistory}
             className="hover:bg-neutral-800 p-1.5 rounded-full transition-colors"
+            aria-label={t(lang, 'chat.newConversation')}
             title={t(lang, 'chat.newConversation')}
           >
             <Trash2 size={15} />
@@ -259,7 +260,7 @@ export default function ChatWidget({ slug, lang = 'fr', menuItems = [] }) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-neutral-50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-neutral-50" aria-live="polite" aria-label={t(lang, 'chat.title')}>
         {messages.map((msg, i) => (
           <div
             key={i}

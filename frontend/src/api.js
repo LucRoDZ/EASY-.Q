@@ -4,7 +4,7 @@ const API_BASE = '';
 function getSessionId() {
   let sessionId = localStorage.getItem('chat_session_id');
   if (!sessionId) {
-    sessionId = 'session_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    sessionId = 'session_' + crypto.randomUUID().replace(/-/g, '');
     localStorage.setItem('chat_session_id', sessionId);
   }
   return sessionId;
@@ -385,10 +385,12 @@ export const api = {
     return res.json();
   },
 
-  async updateRestaurantProfile(slug, body) {
+  async updateRestaurantProfile(slug, body, token) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${API_BASE}/api/v1/restaurants/${slug}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
     });
     if (!res.ok) {
@@ -398,11 +400,14 @@ export const api = {
     return res.json();
   },
 
-  async uploadRestaurantLogo(slug, file) {
+  async uploadRestaurantLogo(slug, file, token) {
     const formData = new FormData();
     formData.append('file', file);
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${API_BASE}/api/v1/restaurants/${slug}/logo`, {
       method: 'POST',
+      headers,
       body: formData,
     });
     if (!res.ok) {

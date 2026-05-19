@@ -49,6 +49,14 @@ export const translations = {
     "waiter.callButton": "Call waiter",
     "waiter.callSent": "Waiter called!",
     "waiter.callError": "Error, try again",
+
+    // Cart item controls
+    "cart.decreaseQty": "Decrease quantity",
+    "cart.increaseQty": "Increase quantity",
+    "cart.removeItem": "Remove item",
+
+    // Search
+    "search.clear": "Clear search",
   },
   
   fr: {
@@ -101,6 +109,14 @@ export const translations = {
     "waiter.callButton": "Appel serveur",
     "waiter.callSent": "Serveur appelé !",
     "waiter.callError": "Erreur, réessayez",
+
+    // Cart item controls
+    "cart.decreaseQty": "Diminuer la quantité",
+    "cart.increaseQty": "Augmenter la quantité",
+    "cart.removeItem": "Retirer l'article",
+
+    // Search
+    "search.clear": "Effacer la recherche",
   },
   
   es: {
@@ -153,6 +169,14 @@ export const translations = {
     "waiter.callButton": "Llamar al camarero",
     "waiter.callSent": "¡Camarero llamado!",
     "waiter.callError": "Error, inténtelo de nuevo",
+
+    // Cart item controls
+    "cart.decreaseQty": "Reducir cantidad",
+    "cart.increaseQty": "Aumentar cantidad",
+    "cart.removeItem": "Eliminar artículo",
+
+    // Search
+    "search.clear": "Borrar búsqueda",
   }
 };
 

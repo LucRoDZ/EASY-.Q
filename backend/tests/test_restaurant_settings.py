@@ -17,6 +17,17 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.db import Base, get_db
 from app.models import RestaurantProfile
+from app.routers.auth import require_authenticated_user
+
+# Fake authenticated user — org_id is set per-test by overriding via slug fixture
+_FAKE_USER = {"sub": "user_test_admin", "org_id": "", "email": "test@example.com"}
+
+
+def _mock_auth_for_slug(slug: str):
+    """Return a dependency override where org_id matches the given slug."""
+    def _auth():
+        return {**_FAKE_USER, "org_id": slug}
+    return _auth
 
 
 # ---------------------------------------------------------------------------
@@ -52,8 +63,16 @@ def client(test_db, monkeypatch):
     monkeypatch.setattr(redis_core, "init_redis", AsyncMock())
     monkeypatch.setattr(redis_core, "close_redis", AsyncMock())
 
+    # Override auth so PATCH/logo endpoints succeed without a real JWT.
+    # The fake user is an admin (sub is in ADMIN_USER_IDS bypass), so the
+    # ownership check in _assert_restaurant_owner always passes.
+    monkeypatch.setattr("app.routers.restaurants.ADMIN_USER_IDS", ["user_test_admin"])
+    app.dependency_overrides[require_authenticated_user] = lambda: _FAKE_USER
+
     with TestClient(app) as c:
         yield c
+
+    app.dependency_overrides.pop(require_authenticated_user, None)
 
 
 def _create_profile(test_db, slug="le-bistrot", name="Le Bistrot") -> None:
@@ -211,6 +230,35 @@ def test_patch_profile_clears_google_place_id(client, test_db):
     resp = client.patch("/api/v1/restaurants/clear-place-id", json={"google_place_id": None})
     assert resp.status_code == 200
     assert resp.json()["google_place_id"] is None
+
+
+def test_patch_profile_updates_stripe_account_id(client, test_db):
+    """PATCH /restaurants/{slug} stores Stripe Connect account ID (authenticated)."""
+    _create_profile(test_db, "stripe-connect-test", "Stripe Connect Test")
+    resp = client.patch(
+        "/api/v1/restaurants/stripe-connect-test",
+        json={"stripe_account_id": "acct_test_abc123"},
+    )
+    assert resp.status_code == 200
+    # stripe_account_id is returned in the authenticated PATCH response
+    assert resp.json()["stripe_account_id"] == "acct_test_abc123"
+
+
+def test_get_profile_does_not_expose_stripe_account_id(client, test_db):
+    """GET /restaurants/{slug} must NOT return stripe_account_id (public endpoint)."""
+    session = test_db()
+    profile = RestaurantProfile(
+        slug="expose-acct-test",
+        name="Expose Account Test",
+        stripe_account_id="acct_expose_xyz",
+    )
+    session.add(profile)
+    session.commit()
+    session.close()
+
+    resp = client.get("/api/v1/restaurants/expose-acct-test")
+    assert resp.status_code == 200
+    assert resp.json().get("stripe_account_id") is None
 
 
 def test_patch_profile_partial_update_preserves_other_fields(client, test_db):

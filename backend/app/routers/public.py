@@ -1,9 +1,13 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
+
+limiter = Limiter(key_func=get_remote_address)
 from app.db import get_db
 from app.schemas import (
     PublicMenuResponse,
@@ -29,7 +33,6 @@ from app.services.conversation_service import (
     save_conversation_messages,
     clear_conversation,
 )
-from app.services.langfuse_service import langfuse_service
 from app.services.email_service import send_low_nps_email
 from app.core import redis as redis_core
 
@@ -100,14 +103,15 @@ def delete_conversation(slug: str, session_id: str, db: Session = Depends(get_db
 
 
 @router.post("/menus/{slug}/chat", response_model=ChatResponse)
-async def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+async def chat_with_menu(request: Request, slug: str, body: ChatRequest, db: Session = Depends(get_db)):
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
 
     full_data = get_full_menu_data(menu)
 
-    lang = request.lang or "en"
+    lang = body.lang or "en"
     translations = full_data.get("translations", {})
     if lang in translations:
         full_data["sections"] = translations[lang].get(
@@ -116,9 +120,9 @@ async def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(
         full_data["wines"] = translations[lang].get("wines", full_data.get("wines", []))
 
     # Load session history from Redis (fast, TTL 2h) and merge with request
-    session_messages = request.messages
-    if request.session_id:
-        redis_messages = await _redis_get_session(request.session_id)
+    session_messages = body.messages
+    if body.session_id:
+        redis_messages = await _redis_get_session(body.session_id)
         if redis_messages:
             session_messages = redis_messages
 
@@ -129,7 +133,7 @@ async def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(
     # If Gemini called place_order, create the order in DB and notify kitchen
     if order_data and order_data.get("items"):
         table_id = None
-        table_token = getattr(request, "table_token", None)
+        table_token = getattr(body, "table_token", None)
         if table_token:
             table = db.query(Table).filter(Table.qr_token == table_token).first()
             if table:
@@ -170,34 +174,23 @@ async def chat_with_menu(slug: str, request: ChatRequest, db: Session = Depends(
         except Exception:
             pass  # Best-effort — KDS may not be connected
 
-    if request.session_id:
-        trace_data = langfuse_service.trace_chat(
-            menu_slug=menu.slug,
-            restaurant_name=menu.restaurant_name,
-            session_id=request.session_id,
-            lang=lang,
-            messages=session_messages,
-            answer=answer,
-            model=MODEL,
-        )
-
+    if body.session_id:
         assistant_message = {"role": "assistant", "content": answer}
-        if trace_data:
-            assistant_message["trace"] = trace_data
         if order_id:
             assistant_message["order_id"] = order_id
 
         messages_to_save = session_messages + [assistant_message]
         # Save to Redis (primary — 2h TTL) and DB (secondary — durable)
-        await _redis_save_session(request.session_id, messages_to_save)
-        save_conversation_messages(db, menu.id, request.session_id, messages_to_save)
+        await _redis_save_session(body.session_id, messages_to_save)
+        save_conversation_messages(db, menu.id, body.session_id, messages_to_save)
 
     return ChatResponse(answer=answer, order_id=order_id)
 
 
 @router.post("/menus/{slug}/chat/stream")
+@limiter.limit("20/minute")
 async def chat_with_menu_stream(
-    slug: str, request: ChatRequest, db: Session = Depends(get_db)
+    request: Request, slug: str, body: ChatRequest, db: Session = Depends(get_db)
 ):
     """Streaming chat endpoint using Server-Sent Events."""
     menu = get_menu_by_slug(db, slug)
@@ -206,7 +199,7 @@ async def chat_with_menu_stream(
 
     full_data = get_full_menu_data(menu)
 
-    lang = request.lang or "en"
+    lang = body.lang or "en"
     translations = full_data.get("translations", {})
     if lang in translations:
         full_data["sections"] = translations[lang].get(
@@ -215,9 +208,9 @@ async def chat_with_menu_stream(
         full_data["wines"] = translations[lang].get("wines", full_data.get("wines", []))
 
     # Load session history from Redis (fast, TTL 2h) and use as conversation context
-    session_messages = request.messages
-    if request.session_id:
-        redis_messages = await _redis_get_session(request.session_id)
+    session_messages = body.messages
+    if body.session_id:
+        redis_messages = await _redis_get_session(body.session_id)
         if redis_messages:
             session_messages = redis_messages
 
@@ -229,26 +222,14 @@ async def chat_with_menu_stream(
                 collected_response.append(chunk)
                 yield f"data: {chunk}\n\n"
 
-            if request.session_id:
+            if body.session_id:
                 full_answer = "".join(collected_response)
-                trace_data = langfuse_service.trace_chat(
-                    menu_slug=menu.slug,
-                    restaurant_name=menu.restaurant_name,
-                    session_id=request.session_id,
-                    lang=lang,
-                    messages=session_messages,
-                    answer=full_answer,
-                    model=MODEL,
-                )
                 assistant_message = {"role": "assistant", "content": full_answer}
-                if trace_data:
-                    assistant_message["trace"] = trace_data
-
                 messages_to_save = session_messages + [assistant_message]
                 # Save to Redis (primary — 2h TTL) and DB (secondary — durable)
-                await _redis_save_session(request.session_id, messages_to_save)
+                await _redis_save_session(body.session_id, messages_to_save)
                 save_conversation_messages(
-                    db, menu.id, request.session_id, messages_to_save
+                    db, menu.id, body.session_id, messages_to_save
                 )
 
             yield "data: [DONE]\n\n"

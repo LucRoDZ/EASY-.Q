@@ -9,17 +9,19 @@ Routes (prefix /api/v1/restaurants):
 import io
 import logging
 from pathlib import Path
+import requests as _requests
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from PIL import Image
 from sqlalchemy.orm import Session
 
 from pydantic import BaseModel
 
-from app.config import BASE_URL, GOOGLE_API_KEY, STORAGE_DIR
+from app.config import ADMIN_USER_IDS, BASE_URL, GOOGLE_API_KEY, STORAGE_DIR
 from app.core import storage as r2
 from app.db import get_db
 from app.models import AuditLog, Menu, RestaurantProfile
+from app.routers.auth import require_authenticated_user
 from app.schemas import LogoUploadResponse, RestaurantProfileResponse, RestaurantProfileUpdate
 
 logger = logging.getLogger(__name__)
@@ -85,7 +87,24 @@ def _resize_logo(data: bytes, content_type: str) -> bytes:
     return buf.getvalue()
 
 
+def _to_public_response(p: RestaurantProfile) -> RestaurantProfileResponse:
+    """Public response — omits stripe_account_id to prevent exposing payment routing."""
+    return RestaurantProfileResponse(
+        slug=p.slug,
+        name=p.name,
+        owner_email=p.owner_email,
+        logo_url=p.logo_url,
+        address=p.address,
+        phone=p.phone,
+        opening_hours=p.opening_hours,
+        timezone=p.timezone,
+        social_links=p.social_links,
+        google_place_id=p.google_place_id,
+    )
+
+
 def _to_response(p: RestaurantProfile) -> RestaurantProfileResponse:
+    """Private response — includes stripe_account_id (authenticated endpoints only)."""
     return RestaurantProfileResponse(
         slug=p.slug,
         name=p.name,
@@ -109,20 +128,30 @@ def _to_response(p: RestaurantProfile) -> RestaurantProfileResponse:
 def get_profile(slug: str, db: Session = Depends(get_db)) -> RestaurantProfileResponse:
     """Return restaurant profile; auto-creates a blank one if it doesn't exist yet."""
     profile = _get_or_create(db, slug)
-    return _to_response(profile)
+    return _to_public_response(profile)
 
 
 # ---------------------------------------------------------------------------
 # PATCH /{slug}
 # ---------------------------------------------------------------------------
 
+def _assert_restaurant_owner(slug: str, current_user: dict) -> None:
+    """Raise 403 unless current_user owns the restaurant or is a platform admin."""
+    user_org = current_user.get("org_id") or ""
+    user_id = current_user.get("sub") or ""
+    if user_org != slug and user_id not in ADMIN_USER_IDS:
+        raise HTTPException(status_code=403, detail="Forbidden: not the restaurant owner")
+
+
 @router.patch("/{slug}", response_model=RestaurantProfileResponse)
 def update_profile(
     slug: str,
     body: RestaurantProfileUpdate,
     db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user),
 ) -> RestaurantProfileResponse:
     """Partial update of restaurant profile fields."""
+    _assert_restaurant_owner(slug, current_user)
     profile = _get_or_create(db, slug)
 
     if body.name is not None:
@@ -143,6 +172,8 @@ def update_profile(
         profile.social_links = body.social_links
     if "google_place_id" in body.model_fields_set:
         profile.google_place_id = body.google_place_id
+    if "stripe_account_id" in body.model_fields_set:
+        profile.stripe_account_id = body.stripe_account_id
 
     db.commit()
     db.refresh(profile)
@@ -158,7 +189,9 @@ async def upload_logo(
     slug: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user),
 ) -> LogoUploadResponse:
+    _assert_restaurant_owner(slug, current_user)
     """Upload a logo image. Stores on R2 if configured, otherwise local storage."""
     content_type = file.content_type or ""
     if content_type not in ALLOWED_IMAGE_TYPES:
@@ -215,6 +248,7 @@ class OnboardingCompleteBody(BaseModel):
 def complete_onboarding(
     body: OnboardingCompleteBody,
     db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user),
 ) -> dict:
     """Record onboarding completion in AuditLog and optionally send welcome email."""
     log = AuditLog(
@@ -263,6 +297,12 @@ def get_google_rating(slug: str, db: Session = Depends(get_db)) -> dict:
 
     place_id = profile.google_place_id
     now = time.time()
+
+    # Evict stale entries to prevent unbounded memory growth
+    stale = [k for k, v in _GOOGLE_RATING_CACHE.items() if (now - v["cached_at"]) >= 3600]
+    for k in stale:
+        _GOOGLE_RATING_CACHE.pop(k, None)
+
     cached = _GOOGLE_RATING_CACHE.get(place_id)
     if cached and (now - cached["cached_at"]) < 3600:
         return {"rating": cached["rating"], "user_ratings_total": cached["total"], "place_id": place_id}
@@ -271,7 +311,6 @@ def get_google_rating(slug: str, db: Session = Depends(get_db)) -> dict:
         return {}
 
     try:
-        import requests as _requests
         resp = _requests.get(
             "https://maps.googleapis.com/maps/api/place/details/json",
             params={
@@ -292,5 +331,3 @@ def get_google_rating(slug: str, db: Session = Depends(get_db)) -> dict:
     except Exception as exc:
         logger.warning("Google Places rating fetch failed for %s: %s", place_id, exc)
         return {}
-
-    return {"ok": True}

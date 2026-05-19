@@ -28,7 +28,7 @@ export default function CartPage() {
   useEffect(() => { setSlug(slug); }, [slug, setSlug]);
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -71,14 +71,16 @@ export default function CartPage() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => updateQuantity(item.name, item.price, item.quantity - 1)}
-                      className="w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center hover:bg-neutral-100 transition-colors"
+                      aria-label={`${t(lang, 'cart.decreaseQty')} — ${item.name}`}
+                      className="w-11 h-11 rounded-full border border-neutral-300 flex items-center justify-center hover:bg-neutral-100 transition-colors"
                     >
                       <Minus className="h-4 w-4" />
                     </button>
                     <span className="w-8 text-center font-medium">{item.quantity}</span>
                     <button
                       onClick={() => updateQuantity(item.name, item.price, item.quantity + 1)}
-                      className="w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center hover:bg-neutral-100 transition-colors"
+                      aria-label={`${t(lang, 'cart.increaseQty')} — ${item.name}`}
+                      className="w-11 h-11 rounded-full border border-neutral-300 flex items-center justify-center hover:bg-neutral-100 transition-colors"
                     >
                       <Plus className="h-4 w-4" />
                     </button>
@@ -90,7 +92,8 @@ export default function CartPage() {
 
                   <button
                     onClick={() => removeItem(item.name, item.price)}
-                    className="p-2 text-neutral-400 hover:text-red-500 transition-colors"
+                    aria-label={`${t(lang, 'cart.removeItem')} — ${item.name}`}
+                    className="p-3 text-neutral-400 hover:text-red-500 transition-colors"
                   >
                     <Trash2 className="h-5 w-5" />
                   </button>
@@ -121,7 +124,7 @@ export default function CartPage() {
 
               {/* Cart validation */}
               {total < 5 && total > 0 && (
-                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                <p role="alert" className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
                   {lang === 'fr'
                     ? `Montant minimum : 5,00 €. Il manque ${formatPrice(5 - total, currency)}.`
                     : lang === 'es'

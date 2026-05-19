@@ -28,7 +28,10 @@ export default function CartSummaryBar({ slug, lang = 'en', currency = 'EUR' }) 
   const cartUrl = `/menu/${slug}/cart?lang=${lang}&currency=${currency}`;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-30 bg-black text-white px-4 py-3 safe-area-inset-bottom">
+    <div
+      className="fixed bottom-0 left-0 right-0 z-30 bg-black text-white px-4 pt-3 pb-3"
+      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+    >
       <Link
         to={cartUrl}
         className="max-w-4xl mx-auto flex items-center justify-between gap-4"

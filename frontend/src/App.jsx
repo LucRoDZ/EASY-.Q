@@ -1,6 +1,9 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { ClerkProvider } from '@clerk/clerk-react';
 import { CartProvider } from './context/CartContext';
+
+const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 // Critical path — loaded eagerly (client-facing, QR scan entry point)
 import ClientMenuPage from './features/client/MenuPage';
@@ -27,13 +30,15 @@ const SubscriptionPage = lazy(() => import('./features/restaurant/SubscriptionPa
 
 function PageLoader() {
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
-      <div className="w-6 h-6 border-2 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
+    <div className="min-h-dvh bg-neutral-50 flex items-center justify-center">
+      <div className="w-6 h-6 border-2 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" role="status">
+        <span className="sr-only">Chargement…</span>
+      </div>
     </div>
   );
 }
 
-export default function App() {
+function AppRoutes() {
   return (
     <CartProvider>
       <Suspense fallback={<PageLoader />}>
@@ -62,4 +67,15 @@ export default function App() {
       </Suspense>
     </CartProvider>
   );
+}
+
+export default function App() {
+  if (CLERK_KEY) {
+    return (
+      <ClerkProvider publishableKey={CLERK_KEY}>
+        <AppRoutes />
+      </ClerkProvider>
+    );
+  }
+  return <AppRoutes />;
 }

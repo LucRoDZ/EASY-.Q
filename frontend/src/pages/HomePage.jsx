@@ -33,7 +33,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       <header className="bg-black text-white">
         <div className="max-w-2xl mx-auto px-4 py-5 flex items-center justify-between">
           <div>
@@ -136,8 +136,9 @@ export default function HomePage() {
                     >
                       {result.public_url}
                     </a>
-                    <button 
+                    <button
                       onClick={() => copyToClipboard(result.public_url)}
+                      aria-label="Copy URL"
                       className="p-1 hover:bg-neutral-200 rounded"
                     >
                       <Copy className="h-4 w-4 text-neutral-500" />
