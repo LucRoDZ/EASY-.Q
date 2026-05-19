@@ -14,8 +14,9 @@ import app.models  # noqa: F401 — ensure all models are imported for autogener
 
 config = context.config
 
-# Override sqlalchemy.url from the app config (supports .env)
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+# Alembic needs a sync driver — replace asyncpg with psycopg2 for migrations
+sync_url = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+config.set_main_option("sqlalchemy.url", sync_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
