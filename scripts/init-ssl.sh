@@ -6,12 +6,15 @@ set -e
 DOMAIN="api.easyq.fr"
 EMAIL="lucaszivan86@gmail.com"
 
+echo "=== Stopping nginx temporarily for standalone challenge ==="
+docker compose stop nginx
+
 echo "=== Getting SSL certificate for $DOMAIN ==="
 docker run --rm \
-  -v "$(pwd)/certbot_www:/var/www/certbot" \
-  -v "$(pwd)/certbot_certs:/etc/letsencrypt" \
+  -p 80:80 \
+  -v certbot_certs:/etc/letsencrypt \
   certbot/certbot certonly \
-  --webroot --webroot-path=/var/www/certbot \
+  --standalone \
   --email "$EMAIL" \
   --agree-tos --no-eff-email \
   -d "$DOMAIN"
@@ -19,11 +22,11 @@ docker run --rm \
 echo "=== Switching nginx to HTTPS config ==="
 cp nginx/app.ssl.conf nginx/app.conf
 
-echo "=== Reloading nginx ==="
-docker compose exec nginx nginx -s reload
+echo "=== Restarting nginx ==="
+docker compose start nginx
 
 echo "=== Done! https://$DOMAIN is live ==="
 
 echo "=== Setting up auto-renewal (cron) ==="
-(crontab -l 2>/dev/null; echo "0 3 * * * cd /opt/easyq && docker run --rm -v \$(pwd)/certbot_www:/var/www/certbot -v \$(pwd)/certbot_certs:/etc/letsencrypt certbot/certbot renew --quiet && docker compose exec nginx nginx -s reload") | crontab -
+(crontab -l 2>/dev/null; echo "0 3 * * * cd /opt/easyq && docker compose stop nginx && docker run --rm -p 80:80 -v certbot_certs:/etc/letsencrypt certbot/certbot renew --standalone --quiet && docker compose start nginx") | crontab -
 echo "Auto-renewal cron added."
