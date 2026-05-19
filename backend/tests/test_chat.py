@@ -9,7 +9,7 @@ Tests for chat / public menu endpoints:
 
 import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -148,8 +148,6 @@ def test_chat_returns_answer(client, menu, monkeypatch):
     monkeypatch.setattr(redis_core, "set_session", AsyncMock())
     monkeypatch.setattr(redis_core, "publish_order_event", AsyncMock())
 
-    # Patch langfuse service
-    monkeypatch.setattr("app.routers.public.langfuse_service.trace_chat", MagicMock(return_value=None))
 
     with _mock_gemini_answer("Voici mes recommandations !"):
         resp = client.post(
@@ -182,7 +180,6 @@ def test_chat_without_session_id_still_works(client, menu, monkeypatch):
     monkeypatch.setattr(redis_core, "get_session", AsyncMock(return_value=[]))
     monkeypatch.setattr(redis_core, "set_session", AsyncMock())
     monkeypatch.setattr(redis_core, "publish_order_event", AsyncMock())
-    monkeypatch.setattr("app.routers.public.langfuse_service.trace_chat", MagicMock(return_value=None))
 
     with _mock_gemini_answer("Bonjour !"):
         resp = client.post(
@@ -205,7 +202,6 @@ def test_chat_uses_redis_session_history(client, menu, monkeypatch):
     monkeypatch.setattr(redis_core, "get_session", AsyncMock(return_value=redis_history))
     monkeypatch.setattr(redis_core, "set_session", AsyncMock())
     monkeypatch.setattr(redis_core, "publish_order_event", AsyncMock())
-    monkeypatch.setattr("app.routers.public.langfuse_service.trace_chat", MagicMock(return_value=None))
 
     with _mock_gemini_answer("D'accord, suite à notre discussion..."):
         resp = client.post(
@@ -228,7 +224,6 @@ def test_chat_persists_messages_to_db(client, menu, test_db, monkeypatch):
     monkeypatch.setattr(redis_core, "get_session", AsyncMock(return_value=[]))
     monkeypatch.setattr(redis_core, "set_session", AsyncMock())
     monkeypatch.setattr(redis_core, "publish_order_event", AsyncMock())
-    monkeypatch.setattr("app.routers.public.langfuse_service.trace_chat", MagicMock(return_value=None))
 
     with _mock_gemini_answer("Bien sûr !"):
         resp = client.post(
@@ -263,7 +258,6 @@ def test_get_conversation_returns_messages(client, menu, test_db, monkeypatch):
     monkeypatch.setattr(redis_core, "get_session", AsyncMock(return_value=[]))
     monkeypatch.setattr(redis_core, "set_session", AsyncMock())
     monkeypatch.setattr(redis_core, "publish_order_event", AsyncMock())
-    monkeypatch.setattr("app.routers.public.langfuse_service.trace_chat", MagicMock(return_value=None))
 
     # First send a chat message to seed the conversation
     with _mock_gemini_answer("La soupe est délicieuse !"):
@@ -302,7 +296,6 @@ def test_delete_conversation_clears_history(client, menu, test_db, monkeypatch):
     monkeypatch.setattr(redis_core, "get_session", AsyncMock(return_value=[]))
     monkeypatch.setattr(redis_core, "set_session", AsyncMock())
     monkeypatch.setattr(redis_core, "publish_order_event", AsyncMock())
-    monkeypatch.setattr("app.routers.public.langfuse_service.trace_chat", MagicMock(return_value=None))
 
     # Seed conversation
     with _mock_gemini_answer("..."):
@@ -341,7 +334,6 @@ def test_chat_stream_returns_sse_content_type(client, menu, monkeypatch):
     monkeypatch.setattr(redis_core, "get_session", AsyncMock(return_value=[]))
     monkeypatch.setattr(redis_core, "set_session", AsyncMock())
     monkeypatch.setattr(redis_core, "publish_order_event", AsyncMock())
-    monkeypatch.setattr("app.routers.public.langfuse_service.trace_chat", MagicMock(return_value=None))
 
     # Mock the streaming generator
     def mock_stream(*args, **kwargs):
@@ -376,7 +368,6 @@ def test_chat_stream_contains_done_marker(client, menu, monkeypatch):
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "get_session", AsyncMock(return_value=[]))
     monkeypatch.setattr(redis_core, "set_session", AsyncMock())
-    monkeypatch.setattr("app.routers.public.langfuse_service.trace_chat", MagicMock(return_value=None))
 
     def mock_stream(*args, **kwargs):
         yield "chunk1"
