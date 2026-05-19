@@ -12,7 +12,7 @@ docker compose stop nginx
 echo "=== Getting SSL certificate for $DOMAIN ==="
 docker run --rm \
   -p 80:80 \
-  -v certbot_certs:/etc/letsencrypt \
+  -v easyq_certbot_certs:/etc/letsencrypt \
   certbot/certbot certonly \
   --standalone \
   --email "$EMAIL" \
