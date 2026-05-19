@@ -24,11 +24,6 @@ def upgrade() -> None:
     op.create_index("ix_payments_menu_slug", "payments", ["menu_slug"], if_not_exists=True)
     op.create_index("ix_payments_status", "payments", ["status"], if_not_exists=True)
 
-    # orders: queried by menu_slug and status (KDS dashboard)
-    op.create_index("ix_orders_menu_slug", "orders", ["menu_slug"], if_not_exists=True)
-    op.create_index("ix_orders_status", "orders", ["status"], if_not_exists=True)
-    op.create_index("ix_orders_table_id", "orders", ["table_id"], if_not_exists=True)
-
     # audit_logs: queried by actor_id, action, and resource_type
     op.create_index("ix_audit_logs_actor_id", "audit_logs", ["actor_id"], if_not_exists=True)
     op.create_index("ix_audit_logs_action", "audit_logs", ["action"], if_not_exists=True)
@@ -54,9 +49,6 @@ def downgrade() -> None:
     op.drop_index("ix_payments_payment_intent_id", "payments")
     op.drop_index("ix_payments_menu_slug", "payments")
     op.drop_index("ix_payments_status", "payments")
-    op.drop_index("ix_orders_menu_slug", "orders")
-    op.drop_index("ix_orders_status", "orders")
-    op.drop_index("ix_orders_table_id", "orders")
     op.drop_index("ix_audit_logs_actor_id", "audit_logs")
     op.drop_index("ix_audit_logs_action", "audit_logs")
     op.drop_index("ix_audit_logs_resource_type", "audit_logs")
