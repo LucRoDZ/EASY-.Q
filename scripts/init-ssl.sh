@@ -3,7 +3,7 @@
 # Usage: cd /opt/easyq && bash scripts/init-ssl.sh
 set -e
 
-DOMAIN="api.easy.fr"
+DOMAIN="api.easyq.fr"
 EMAIL="lucaszivan86@gmail.com"
 
 echo "=== Getting SSL certificate for $DOMAIN ==="
