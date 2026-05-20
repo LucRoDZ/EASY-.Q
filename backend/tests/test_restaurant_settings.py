@@ -492,3 +492,42 @@ def test_google_rating_cached_skips_api_call(client, test_db, monkeypatch):
 
     assert resp.status_code == 200
     assert resp.json()["rating"] == 4.2
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/restaurants/onboarding/complete
+# ---------------------------------------------------------------------------
+
+def test_onboarding_complete_creates_profile(client, test_db):
+    """First call creates a RestaurantProfile and returns status + slug."""
+    resp = client.post(
+        "/api/v1/restaurants/onboarding/complete",
+        json={"restaurant_name": "Le Petit Bistro"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["slug"] == "le-petit-bistro"
+
+    session = test_db()
+    profile = session.query(RestaurantProfile).filter_by(slug="le-petit-bistro").first()
+    assert profile is not None
+    assert profile.name == "Le Petit Bistro"
+    session.close()
+
+
+def test_onboarding_complete_updates_existing_profile(client, test_db):
+    """Second call with the same slug updates name without overwriting other fields."""
+    _create_profile(test_db, slug="le-bistrot", name="Old Name")
+
+    resp = client.post(
+        "/api/v1/restaurants/onboarding/complete",
+        json={"restaurant_name": "Le Bistrot", "slug": "le-bistrot"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["slug"] == "le-bistrot"
+
+    session = test_db()
+    profile = session.query(RestaurantProfile).filter_by(slug="le-bistrot").first()
+    assert profile.name == "Le Bistrot"
+    session.close()

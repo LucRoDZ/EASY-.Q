@@ -244,19 +244,37 @@ class OnboardingCompleteBody(BaseModel):
     owner_email: str | None = None
 
 
+def _slugify(name: str) -> str:
+    import re
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    return slug.strip("-") or "restaurant"
+
+
 @router.post("/onboarding/complete")
 def complete_onboarding(
     body: OnboardingCompleteBody,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_authenticated_user),
 ) -> dict:
-    """Record onboarding completion in AuditLog and optionally send welcome email."""
+    """Upsert RestaurantProfile and record onboarding completion in AuditLog."""
+    slug = body.slug or _slugify(body.restaurant_name)
+    owner_email = body.owner_email or current_user.get("email", "")
+
+    # Upsert profile
+    profile = db.query(RestaurantProfile).filter(RestaurantProfile.slug == slug).first()
+    if profile:
+        profile.name = body.restaurant_name
+    else:
+        profile = RestaurantProfile(slug=slug, name=body.restaurant_name, owner_email=owner_email)
+        db.add(profile)
+
     log = AuditLog(
         actor_type="user",
-        actor_id=body.slug or body.restaurant_name,
+        actor_id=slug,
         action="onboarding.complete",
         resource_type="restaurant",
-        resource_id=body.slug or body.restaurant_name,
+        resource_id=slug,
         payload={
             "restaurant_name": body.restaurant_name,
             "tables_created": body.tables_created,
@@ -267,13 +285,15 @@ def complete_onboarding(
     db.add(log)
     db.commit()
 
-    # Send welcome email if owner_email is provided
-    if body.owner_email:
+    # Send welcome email if owner_email is available
+    if owner_email:
         from app.services.email_service import send_welcome_email
         try:
-            send_welcome_email(to=body.owner_email, restaurant_name=body.restaurant_name)
+            send_welcome_email(to=owner_email, restaurant_name=body.restaurant_name)
         except Exception:
-            pass  # Non-critical — don't fail onboarding if email fails
+            pass  # Non-critical
+
+    return {"status": "ok", "slug": slug}
 
 
 # ---------------------------------------------------------------------------
