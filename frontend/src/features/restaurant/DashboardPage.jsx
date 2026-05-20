@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import {
   Loader2, UtensilsCrossed, QrCode, Upload, Plus,
   ClipboardList, AlertCircle, Languages, Bell, Star, BarChart2,
@@ -367,16 +368,18 @@ function QuickActionsCard({ menu }) {
 // ─── DashboardPage ────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { getToken } = useAuth();
   const [menus, setMenus] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.getDashboardMenus()
+    getToken()
+      .then((token) => api.getDashboardMenus(token))
       .then((d) => setMenus(d.menus || []))
       .catch(() => setError('Impossible de charger le tableau de bord.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [getToken]);
 
   const activeMenu = menus[0] || null;
   const totalSections = menus.reduce((s, m) => s + (m.section_count || 0), 0);

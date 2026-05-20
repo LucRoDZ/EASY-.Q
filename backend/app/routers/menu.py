@@ -2,12 +2,13 @@ import asyncio
 import hashlib
 import json
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core import redis as redis_core
 from app.db import SessionLocal, get_db
 from app.models import Menu, Subscription
+from app.routers.auth import require_authenticated_user
 from app.schemas import (
     BulkTranslateResponse,
     MenuCreateResponse,
@@ -138,7 +139,8 @@ async def upload_menu(
     restaurant_name: str = Form(...),
     languages: str = Form("en,fr,es"),
     pdf: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ):
     content = await pdf.read()
 
@@ -151,6 +153,8 @@ async def upload_menu(
     pdf_path = save_pdf(content, pdf.filename or "menu.pdf")
 
     menu, qr_url = create_menu(db, restaurant_name, pdf_path, languages)
+    menu.restaurant_id = user["sub"]
+    db.commit()
 
     from app.config import BASE_URL
     public_url = f"{BASE_URL}/menu/{menu.slug}"
@@ -172,8 +176,8 @@ async def upload_menu_v1(
     background_tasks: BackgroundTasks,
     restaurant_name: str = Form(...),
     file: UploadFile = File(...),
-    restaurant_id: str | None = Form(None),
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> UploadMenuResponse:
     """Upload a PDF or image menu. OCR runs asynchronously.
 
@@ -198,8 +202,10 @@ async def upload_menu_v1(
             detail="Invalid file — PDF or image (JPEG/PNG/WebP) required",
         )
 
+    restaurant_id = user["sub"]
+
     # Enforce free plan: max 1 menu per restaurant
-    _check_menu_plan_limit(restaurant_id or "", db)
+    _check_menu_plan_limit(restaurant_id, db)
 
     sha256 = hashlib.sha256(content).hexdigest()
     filename = file.filename or "menu.pdf"
@@ -219,6 +225,7 @@ async def upload_menu_v1(
         menu_data_json = "{}"
 
     menu = Menu(
+        restaurant_id=restaurant_id,
         restaurant_name=restaurant_name,
         slug=slug,
         pdf_path=file_path,

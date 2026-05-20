@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Upload, QrCode, Loader2, CheckCircle, Copy } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import { api } from '../api';
 
 export default function HomePage() {
+  const { getToken } = useAuth();
   const [restaurantName, setRestaurantName] = useState('');
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -19,7 +21,8 @@ export default function HomePage() {
     setResult(null);
     
     try {
-      const data = await api.uploadMenu(restaurantName.trim(), file);
+      const token = await getToken();
+      const data = await api.uploadMenu(restaurantName.trim(), file, token);
       setResult(data);
     } catch (err) {
       setError(err.message || 'Upload failed');

@@ -8,6 +8,7 @@ class Menu(Base):
     __tablename__ = "menus"
 
     id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(String(100), nullable=True, index=True)  # Clerk user ID — null for anonymous uploads
     restaurant_name = Column(String(255), nullable=False)
     slug = Column(String(100), unique=True, nullable=False, index=True)
     pdf_path = Column(String(500), nullable=False)

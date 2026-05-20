@@ -11,6 +11,7 @@ from app.services.conversation_service import (
 )
 from app.services.menu_service import get_menu_by_slug
 from app.core import redis as redis_core
+from app.routers.auth import require_authenticated_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -29,19 +30,29 @@ def _parse_menu_counts(menu_data_json: str | None) -> tuple[int, int]:
 
 
 @router.get("/menus")
-def get_dashboard_menus(db: Session = Depends(get_db)):
-    menus = db.query(Menu).order_by(Menu.created_at.desc()).all()
-
-    # Batch table counts: {slug: count}
-    table_counts: dict[str, int] = {}
-    rows = (
-        db.query(Table.menu_slug, func.count(Table.id))
-        .filter(Table.is_active)
-        .group_by(Table.menu_slug)
+def get_dashboard_menus(
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
+    restaurant_id = user["sub"]
+    menus = (
+        db.query(Menu)
+        .filter(Menu.restaurant_id == restaurant_id)
+        .order_by(Menu.created_at.desc())
         .all()
     )
-    for slug, cnt in rows:
-        table_counts[slug] = cnt
+
+    table_counts: dict[str, int] = {}
+    if menus:
+        slugs = [m.slug for m in menus]
+        rows = (
+            db.query(Table.menu_slug, func.count(Table.id))
+            .filter(Table.is_active, Table.menu_slug.in_(slugs))
+            .group_by(Table.menu_slug)
+            .all()
+        )
+        for slug, cnt in rows:
+            table_counts[slug] = cnt
 
     response = []
     for menu in menus:
@@ -71,10 +82,16 @@ def get_dashboard_menus(db: Session = Depends(get_db)):
 
 
 @router.get("/menus/{slug}/conversations")
-def get_dashboard_conversations(slug: str, db: Session = Depends(get_db)):
+def get_dashboard_conversations(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     conversations = list_menu_conversations(db, menu.id)
     conv_data = []
@@ -101,11 +118,16 @@ def get_dashboard_conversations(slug: str, db: Session = Depends(get_db)):
 
 
 @router.get("/menus/{slug}/waiter-calls")
-async def get_waiter_calls(slug: str, db: Session = Depends(get_db)):
-    """Return pending waiter calls for a restaurant (dashboard polling)."""
+async def get_waiter_calls(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     try:
         calls = await redis_core.get_waiter_calls(slug)
     except Exception:
@@ -115,12 +137,15 @@ async def get_waiter_calls(slug: str, db: Session = Depends(get_db)):
 
 @router.patch("/menus/{slug}/waiter-calls/{call_id}/status")
 async def update_waiter_call_status(
-    slug: str, call_id: str, body: dict, db: Session = Depends(get_db)
+    slug: str, call_id: str, body: dict,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ):
-    """Update waiter call status: pending → acknowledged → resolved."""
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     new_status = body.get("status")
     if new_status not in ("pending", "acknowledged", "resolved"):
@@ -137,7 +162,6 @@ async def update_waiter_call_status(
     if updated is None:
         raise HTTPException(status_code=404, detail="Call not found")
 
-    # If resolved, remove from active hash
     if new_status == "resolved":
         try:
             await redis_core.dismiss_waiter_call(slug, call_id)
@@ -148,11 +172,16 @@ async def update_waiter_call_status(
 
 
 @router.delete("/menus/{slug}/waiter-calls/{call_id}")
-async def dismiss_waiter_call(slug: str, call_id: str, db: Session = Depends(get_db)):
-    """Dismiss (remove) a waiter call from the active list."""
+async def dismiss_waiter_call(
+    slug: str, call_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     try:
         await redis_core.dismiss_waiter_call(slug, call_id)
     except Exception:
@@ -165,11 +194,13 @@ async def get_waiter_call_history(
     slug: str,
     table_number: str | None = None,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ):
-    """Return waiter call history for a restaurant (last 200 calls), optionally filtered by table."""
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     try:
         calls = await redis_core.get_call_history(slug, table_number=table_number)
     except Exception:
@@ -178,11 +209,16 @@ async def get_waiter_call_history(
 
 
 @router.get("/menus/{slug}/analytics/reviews")
-def get_review_analytics(slug: str, db: Session = Depends(get_db)):
-    """Return NPS analytics for a restaurant: average, distribution, recent reviews."""
+def get_review_analytics(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     logs = (
         db.query(AuditLog)

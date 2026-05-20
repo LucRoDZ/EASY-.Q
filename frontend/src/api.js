@@ -77,14 +77,15 @@ export const api = {
     }
   },
 
-  async uploadMenu(restaurantName, pdfFile, languages = 'en,fr,es') {
+  async uploadMenu(restaurantName, pdfFile, token, languages = 'en,fr,es') {
     const formData = new FormData();
     formData.append('restaurant_name', restaurantName);
     formData.append('languages', languages);
     formData.append('pdf', pdfFile);
-    
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const res = await fetch(`${API_BASE}/api/menus`, {
       method: 'POST',
+      headers,
       body: formData,
     });
     const raw = await res.text();
@@ -109,13 +110,14 @@ export const api = {
   },
 
   // v1 async upload — returns {menu_id, slug, status}
-  async uploadMenuAsync(restaurantName, file) {
+  async uploadMenuAsync(restaurantName, file, token) {
     const formData = new FormData();
     formData.append('restaurant_name', restaurantName);
     formData.append('file', file);
-
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const res = await fetch(`${API_BASE}/api/v1/menus/upload`, {
       method: 'POST',
+      headers,
       body: formData,
     });
     const raw = await res.text();
@@ -233,8 +235,10 @@ export const api = {
     URL.revokeObjectURL(url);
   },
 
-  async getDashboardMenus() {
-    const res = await fetch(`${API_BASE}/api/dashboard/menus`);
+  async getDashboardMenus(token) {
+    const res = await fetch(`${API_BASE}/api/dashboard/menus`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to load menus');
     return res.json();
   },

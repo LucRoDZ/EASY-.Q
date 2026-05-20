@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import { Loader2, Upload, X, FileText, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { api } from '../../api';
 
@@ -15,6 +16,7 @@ function formatFileSize(bytes) {
 
 export default function OCRUploadPage() {
   const navigate = useNavigate();
+  const { getToken } = useAuth();
   const fileInputRef = useRef(null);
   const pollRef = useRef(null);
 
@@ -103,7 +105,8 @@ export default function OCRUploadPage() {
     setUploadError('');
 
     try {
-      const result = await api.uploadMenuAsync(restaurantName.trim(), file);
+      const token = await getToken();
+      const result = await api.uploadMenuAsync(restaurantName.trim(), file, token);
       setMenuId(result.menu_id);
       setOcrStatus(result.status);
 
