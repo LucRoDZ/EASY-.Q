@@ -389,17 +389,23 @@ export default function OnboardingPage() {
     const nextStep = step + 1;
     setStep(nextStep);
 
-    // On reaching the celebration step, log onboarding completion
+    // On reaching the celebration step, upsert RestaurantProfile + audit log
     if (nextStep === 4) {
-      fetch('/api/v1/restaurants/onboarding/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          restaurant_name: newData.restaurantName || 'Restaurant',
-          tables_created: newData.tablesCreated || 0,
-          menu_uploaded: newData.menuUploaded || false,
-          demo: newData.demo || false,
-        }),
+      getToken().then((token) => {
+        const API_BASE = import.meta.env.VITE_API_URL || '';
+        fetch(`${API_BASE}/api/v1/restaurants/onboarding/complete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            restaurant_name: newData.restaurantName || 'Restaurant',
+            tables_created: newData.tablesCreated || 0,
+            menu_uploaded: newData.menuUploaded || false,
+            demo: newData.demo || false,
+          }),
+        });
       }).catch(() => {}); // Non-critical
     }
   };

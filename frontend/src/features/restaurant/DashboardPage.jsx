@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import {
   Loader2, UtensilsCrossed, QrCode, Upload, Plus,
@@ -369,6 +369,7 @@ function QuickActionsCard({ menu }) {
 
 export default function DashboardPage() {
   const { getToken } = useAuth();
+  const navigate = useNavigate();
   const [menus, setMenus] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -410,6 +411,22 @@ export default function DashboardPage() {
         ) : error ? (
           <div className="flex items-center gap-2 text-neutral-600 bg-white border border-neutral-200 rounded-xl p-4">
             <AlertCircle size={16} /> {error}
+          </div>
+        ) : menus.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="w-16 h-16 bg-neutral-100 rounded-2xl flex items-center justify-center mb-6">
+              <QrCode size={28} className="text-neutral-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-neutral-900 mb-2">Aucun menu pour l'instant</h2>
+            <p className="text-sm text-neutral-500 max-w-xs mb-8">
+              Importez votre carte PDF et notre IA crée votre menu digital en quelques minutes.
+            </p>
+            <button
+              onClick={() => navigate('/onboarding')}
+              className="bg-black text-white px-6 py-3 rounded-full font-medium hover:bg-neutral-800 transition-colors"
+            >
+              Créer mon premier menu
+            </button>
           </div>
         ) : (
           <>
