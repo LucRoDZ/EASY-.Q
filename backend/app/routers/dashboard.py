@@ -15,6 +15,11 @@ from app.routers.auth import require_authenticated_user
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
+def _assert_owns_menu(menu: Menu, user: dict) -> None:
+    """Raise 403 if the authenticated user does not own this menu."""
+    _assert_owns_menu(menu, user)
+
+
 def _parse_menu_counts(menu_data_json: str | None) -> tuple[int, int]:
     """Return (section_count, item_count) from raw menu_data JSON string."""
     if not menu_data_json:
@@ -100,8 +105,7 @@ def get_dashboard_conversations(
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
-    if menu.restaurant_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    _assert_owns_menu(menu, user)
 
     conversations = list_menu_conversations(db, menu.id)
     conv_data = []
@@ -136,8 +140,7 @@ async def get_waiter_calls(
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
-    if menu.restaurant_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    _assert_owns_menu(menu, user)
     try:
         calls = await redis_core.get_waiter_calls(slug)
     except Exception:
@@ -154,8 +157,7 @@ async def update_waiter_call_status(
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
-    if menu.restaurant_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    _assert_owns_menu(menu, user)
 
     new_status = body.get("status")
     if new_status not in ("pending", "acknowledged", "resolved"):
@@ -190,8 +192,7 @@ async def dismiss_waiter_call(
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
-    if menu.restaurant_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    _assert_owns_menu(menu, user)
     try:
         await redis_core.dismiss_waiter_call(slug, call_id)
     except Exception:
@@ -209,8 +210,7 @@ async def get_waiter_call_history(
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
-    if menu.restaurant_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    _assert_owns_menu(menu, user)
     try:
         calls = await redis_core.get_call_history(slug, table_number=table_number)
     except Exception:
@@ -227,8 +227,7 @@ def get_review_analytics(
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
-    if menu.restaurant_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    _assert_owns_menu(menu, user)
 
     logs = (
         db.query(AuditLog)
