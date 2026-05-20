@@ -58,10 +58,8 @@ dev-dist/
 .DS_Store
 Thumbs.db
 
-# ── Ralph runtime state (logs, metrics, session state) ────────────────────────
-.ralph/logs/
-.ralph/live.log
-.ralph/progress.json
+# ── Ralph — entire directory excluded from git ────────────────────────────────
+.ralph/
 .ralph/status.json
 .ralph/docs/generated/
 .ralphrc
