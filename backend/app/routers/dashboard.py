@@ -4,9 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.models import AuditLog, Menu, Table
+from app.models import AuditLog, Conversation, Menu, Table
 from app.services.conversation_service import (
-    list_menu_conversations,
     parse_conversation_messages,
 )
 from app.services.menu_service import get_menu_by_slug
@@ -54,9 +53,20 @@ def get_dashboard_menus(
         for slug, cnt in rows:
             table_counts[slug] = cnt
 
+    # Batch-fetch all conversations for all menus in one query (avoids N+1)
+    menu_ids = [m.id for m in menus]
+    all_conversations = (
+        db.query(Conversation)
+        .filter(Conversation.menu_id.in_(menu_ids))
+        .all()
+    ) if menu_ids else []
+    convs_by_menu: dict[int, list] = {}
+    for c in all_conversations:
+        convs_by_menu.setdefault(c.menu_id, []).append(c)
+
     response = []
     for menu in menus:
-        conversations = list_menu_conversations(db, menu.id)
+        conversations = convs_by_menu.get(menu.id, [])
         total_messages = sum(
             len(parse_conversation_messages(c)) for c in conversations
         )

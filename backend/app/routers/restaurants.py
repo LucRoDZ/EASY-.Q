@@ -290,8 +290,8 @@ def complete_onboarding(
         from app.services.email_service import send_welcome_email
         try:
             send_welcome_email(to=owner_email, restaurant_name=body.restaurant_name)
-        except Exception:
-            pass  # Non-critical
+        except Exception as e:
+            logger.warning("Failed to send welcome email to %s: %s", owner_email, e)  # Non-critical
 
     return {"status": "ok", "slug": slug}
 

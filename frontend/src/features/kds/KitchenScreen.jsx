@@ -2,8 +2,8 @@
  * KitchenScreen — KDS (Kitchen Display System)
  *
  * Dark tablet-optimized UI.
- * Auth: ?token=<KDS_SECRET_TOKEN> in the URL.
- * WebSocket: /api/v1/ws/kds/{slug}?token=...
+ * Auth: send {"token": "<KDS_SECRET_TOKEN>"} as first message after WebSocket connect.
+ * WebSocket: /api/v1/ws/kds/{slug}
  *
  * Kanban columns: Pending → In Progress → Ready → Done
  */
@@ -148,11 +148,12 @@ export default function KitchenScreen() {
   const connect = useCallback(() => {
     if (!slug || !token) return;
 
-    const wsUrl = `${WS_BASE}/api/v1/ws/kds/${slug}?token=${encodeURIComponent(token)}`;
+    const wsUrl = `${WS_BASE}/api/v1/ws/kds/${slug}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      ws.send(JSON.stringify({ token }));
       setConnected(true);
       setError('');
       reconnectDelay.current = 1000;

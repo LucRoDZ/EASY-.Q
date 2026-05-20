@@ -1,11 +1,12 @@
 """KDS (Kitchen Display System) — WebSocket real-time orders.
 
 Endpoints:
-  WS   /api/v1/ws/kds/{slug}?token=<KDS_SECRET_TOKEN>  — kitchen display
+  WS   /api/v1/ws/kds/{slug}  — kitchen display (auth: send {"token": "<KDS_SECRET_TOKEN>"} as first message after connect)
   GET  /api/v1/kds/{slug}/orders                        — list active orders
   PATCH /api/v1/kds/{slug}/orders/{order_id}/status     — update order status
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -76,19 +77,27 @@ def _verify_kds_token(token: str | None) -> bool:
 # ---------------------------------------------------------------------------
 
 @router.websocket("/api/v1/ws/kds/{slug}")
-async def kds_websocket(slug: str, ws: WebSocket, token: str | None = None):
+async def kds_websocket(slug: str, ws: WebSocket):
     """WebSocket endpoint for KDS screens.
 
-    Auth: ?token=<KDS_SECRET_TOKEN> query parameter.
+    Auth: send {"token": "<KDS_SECRET_TOKEN>"} as first message after connect.
     On connect: sends all active (non-done) orders as initial state.
     On message: expects {type: "status_update", order_id: int, status: str}.
     Broadcasts: {type: "new_order" | "status_update", ...} to all connected screens.
     """
+    await kds_manager.connect(slug, ws)
+
+    # Authenticate via first WebSocket message (keeps token out of nginx logs)
+    try:
+        auth_raw = await asyncio.wait_for(ws.receive_text(), timeout=10.0)
+        auth_msg = json.loads(auth_raw)
+        token = auth_msg.get("token") if isinstance(auth_msg, dict) else None
+    except (asyncio.TimeoutError, json.JSONDecodeError):
+        token = None
+
     if not _verify_kds_token(token):
         await ws.close(code=4401, reason="Unauthorized")
         return
-
-    await kds_manager.connect(slug, ws)
 
     # Send initial orders snapshot (non-done/cancelled)
     from app.db import SessionLocal
@@ -280,5 +289,5 @@ async def kds_redis_subscriber() -> None:
             await pubsub.punsubscribe("kds:*")
             await pubsub.aclose()
         except Exception:
-            pass
+            logger.exception("Failed to cleanly close KDS Redis pubsub")
         logger.info("KDS Redis subscriber stopped")

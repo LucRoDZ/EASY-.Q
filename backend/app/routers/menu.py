@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
@@ -25,6 +26,8 @@ from app.schemas import (
 from app.services.file_service import save_pdf, save_upload_file, is_valid_pdf, detect_mime_type
 from app.services.menu_service import _slugify, create_menu
 from app.services.ocr_service import extract_menu_from_pdf, extract_menu_from_images, translate_menu, validate_ocr_result
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/menus", tags=["menus"])
 router_v1 = APIRouter(prefix="/api/v1/menus", tags=["menus"])
@@ -257,7 +260,7 @@ def get_menu_status(menu_id: int, db: Session = Depends(get_db)) -> MenuStatusRe
         try:
             menu_data = json.loads(menu.menu_data)
         except Exception:
-            pass
+            logger.exception("Failed to parse menu_data JSON for menu %s", menu_id)
 
     return MenuStatusResponse(
         menu_id=menu.id,
@@ -280,7 +283,7 @@ def get_menu_for_editor(menu_id: int, db: Session = Depends(get_db)) -> MenuEdit
         try:
             data = json.loads(menu.menu_data)
         except Exception:
-            pass
+            logger.exception("Failed to parse menu_data JSON for menu %s", menu.id)
 
     return MenuEditorResponse(
         menu_id=menu.id,
@@ -334,7 +337,7 @@ async def translate_menu_endpoint(
         try:
             data = json.loads(menu.menu_data)
         except Exception:
-            pass
+            logger.exception("Failed to parse menu_data JSON for menu %s", menu.id)
 
     base_menu = {
         "sections": data.get("sections", []),
@@ -387,7 +390,7 @@ async def bulk_translate_menu(
         try:
             data = json.loads(menu.menu_data)
         except Exception:
-            pass
+            logger.exception("Failed to parse menu_data JSON for menu %s", menu.id)
 
     base_menu = {
         "sections": data.get("sections", []),
@@ -441,7 +444,7 @@ async def save_translation(
         try:
             data = json.loads(menu.menu_data)
         except Exception:
-            pass
+            logger.exception("Failed to parse menu_data JSON for menu %s", menu.id)
 
     translations: dict = data.get("translations", {})
     translations[lang] = {"sections": body.sections, "wines": body.wines}
@@ -480,7 +483,7 @@ async def update_menu(
         try:
             data = json.loads(menu.menu_data)
         except Exception:
-            pass
+            logger.exception("Failed to parse menu_data JSON for menu %s", menu.id)
 
     if body.restaurant_name is not None:
         menu.restaurant_name = body.restaurant_name

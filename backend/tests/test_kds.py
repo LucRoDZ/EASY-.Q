@@ -240,27 +240,29 @@ def test_update_done_order_stays_done(client, test_db):
 # ---------------------------------------------------------------------------
 
 def test_ws_rejects_missing_token(client, test_db):
-    """WebSocket without token is rejected (server closes with 4401)."""
+    """WebSocket without token payload is rejected (server closes with 4401)."""
     from starlette.websockets import WebSocketDisconnect
 
     seed_menu(test_db, slug="ws-no-token")
     with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect("/api/v1/ws/kds/ws-no-token"):
-            pass
+        with client.websocket_connect("/api/v1/ws/kds/ws-no-token") as ws:
+            ws.send_json({})  # no token field → rejected
+            ws.receive_json()  # server closes 4401 → raises WebSocketDisconnect
 
 
 def test_ws_rejects_wrong_token(client, test_db):
-    """WebSocket with wrong token is rejected."""
+    """WebSocket with wrong token payload is rejected."""
     from starlette.websockets import WebSocketDisconnect
 
     seed_menu(test_db, slug="ws-wrong-token")
     with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect("/api/v1/ws/kds/ws-wrong-token?token=bad-token"):
-            pass
+        with client.websocket_connect("/api/v1/ws/kds/ws-wrong-token") as ws:
+            ws.send_json({"token": "bad-token"})
+            ws.receive_json()  # server closes 4401 → raises WebSocketDisconnect
 
 
 def test_ws_connects_with_valid_token(client, test_db):
-    """WebSocket with valid token receives initial snapshot.
+    """WebSocket with valid token (first message) receives initial snapshot.
 
     Patches kds.SessionLocal so the WS handler uses the test DB.
     """
@@ -270,7 +272,8 @@ def test_ws_connects_with_valid_token(client, test_db):
 
     # kds_websocket uses SessionLocal directly (not get_db DI) — patch it.
     with patch("app.db.SessionLocal", test_db):
-        with client.websocket_connect(f"/api/v1/ws/kds/{slug}?token={KDS_TOKEN}") as ws:
+        with client.websocket_connect(f"/api/v1/ws/kds/{slug}") as ws:
+            ws.send_json({"token": KDS_TOKEN})
             msg = ws.receive_json()
             assert msg["type"] == "snapshot"
             assert "orders" in msg
@@ -285,7 +288,8 @@ def test_ws_snapshot_excludes_done_orders(client, test_db):
     seed_order(test_db, menu_slug=slug, status="done")
 
     with patch("app.db.SessionLocal", test_db):
-        with client.websocket_connect(f"/api/v1/ws/kds/{slug}?token={KDS_TOKEN}") as ws:
+        with client.websocket_connect(f"/api/v1/ws/kds/{slug}") as ws:
+            ws.send_json({"token": KDS_TOKEN})
             msg = ws.receive_json()
             assert msg["type"] == "snapshot"
             assert len(msg["orders"]) == 1
@@ -299,7 +303,8 @@ def test_ws_status_update_message(client, test_db):
     order_id = seed_order(test_db, menu_slug=slug, status="pending")
 
     with patch("app.db.SessionLocal", test_db):
-        with client.websocket_connect(f"/api/v1/ws/kds/{slug}?token={KDS_TOKEN}") as ws:
+        with client.websocket_connect(f"/api/v1/ws/kds/{slug}") as ws:
+            ws.send_json({"token": KDS_TOKEN})
             # Consume snapshot
             ws.receive_json()
 
