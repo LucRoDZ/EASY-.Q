@@ -10,6 +10,7 @@
 
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import {
   Store, Upload, Table2, CheckCircle2,
   Loader2, ArrowRight, ArrowLeft, Sparkles,
@@ -169,7 +170,7 @@ function StepRestaurant({ onNext }) {
 // Step 2: Upload menu or use demo
 // ---------------------------------------------------------------------------
 
-function StepMenu({ onNext, onBack }) {
+function StepMenu({ onNext, onBack, restaurantName, getToken }) {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -180,7 +181,8 @@ function StepMenu({ onNext, onBack }) {
     setLoading(true);
     setError('');
     try {
-      await api.uploadMenu('Mon restaurant', file, 'fr,en');
+      const token = await getToken();
+      await api.uploadMenuAsync(restaurantName, file, token);
       onNext({ menuUploaded: true });
     } catch (err) {
       setError(err.message || 'Échec de l\'import.');
@@ -377,6 +379,7 @@ function StepDone({ data }) {
 // ---------------------------------------------------------------------------
 
 export default function OnboardingPage() {
+  const { getToken } = useAuth();
   const [step, setStep] = useState(1);
   const [data, setData] = useState({});
 
@@ -416,7 +419,7 @@ export default function OnboardingPage() {
 
         <div className="bg-white border border-neutral-200 rounded-xl p-7">
           {step === 1 && <StepRestaurant onNext={next} />}
-          {step === 2 && <StepMenu onNext={next} onBack={back} />}
+          {step === 2 && <StepMenu onNext={next} onBack={back} restaurantName={data.restaurantName || ''} getToken={getToken} />}
           {step === 3 && <StepTables onNext={next} onBack={back} />}
           {step === 4 && <StepDone data={data} />}
         </div>
