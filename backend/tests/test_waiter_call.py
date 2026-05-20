@@ -17,6 +17,8 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.db import Base, get_db
 from app.models import Menu, Table
+from app.routers.auth import require_authenticated_user
+from tests.conftest import FAKE_USER
 
 
 # ---------------------------------------------------------------------------
@@ -52,8 +54,10 @@ def client(test_db, monkeypatch):
     monkeypatch.setattr(redis_core, "init_redis", AsyncMock())
     monkeypatch.setattr(redis_core, "close_redis", AsyncMock())
 
+    app.dependency_overrides[require_authenticated_user] = lambda: FAKE_USER
     with TestClient(app) as c:
         yield c
+    app.dependency_overrides.pop(require_authenticated_user, None)
 
 
 @pytest.fixture
@@ -63,6 +67,7 @@ def menu_and_table(test_db):
     import json
 
     menu = Menu(
+        restaurant_id=FAKE_USER["sub"],
         restaurant_name="Test Bistro",
         slug="test-bistro",
         pdf_path="test.pdf",

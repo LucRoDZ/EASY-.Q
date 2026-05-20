@@ -8,8 +8,10 @@ Provides:
 """
 
 import os
-# Force SQLite for tests before any app module is imported (avoids asyncpg/psycopg2 deps)
-os.environ.setdefault("DATABASE_URL", "sqlite:///./test_easyq.db")
+# Force test values before any app module is imported (load_dotenv in config.py won't override these)
+os.environ["DATABASE_URL"] = "sqlite:///./test_easyq.db"
+os.environ["CLERK_JWKS_URL"] = ""  # disable JWKS verification in tests
+os.environ["KDS_SECRET_TOKEN"] = "kds-dev-token-change-in-production"  # use default test token
 
 import json
 import pytest
@@ -23,6 +25,9 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.db import Base, get_db
 from app.models import Menu, Subscription
+from app.routers.auth import require_authenticated_user
+
+FAKE_USER = {"sub": "user_test123", "email": "test@example.com"}
 
 
 # ---------------------------------------------------------------------------
@@ -64,14 +69,18 @@ def test_db():
 
 @pytest.fixture
 def client(test_db, monkeypatch):
-    """FastAPI TestClient with the in-memory DB and mocked Redis lifecycle."""
+    """FastAPI TestClient with the in-memory DB, mocked Redis, and fake auth."""
     import app.core.redis as redis_core
 
     monkeypatch.setattr(redis_core, "init_redis", AsyncMock())
     monkeypatch.setattr(redis_core, "close_redis", AsyncMock())
 
+    app.dependency_overrides[require_authenticated_user] = lambda: FAKE_USER
+
     with TestClient(app) as c:
         yield c
+
+    app.dependency_overrides.pop(require_authenticated_user, None)
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +152,7 @@ def seed_menu(
     status: str = "ready",
     publish_status: str = "draft",
     menu_data: dict | None = None,
+    restaurant_id: str = "user_test123",
 ) -> int:
     """Insert a Menu row and return its id."""
     if menu_data is None:
@@ -160,6 +170,7 @@ def seed_menu(
         }
     session = test_db()
     m = Menu(
+        restaurant_id=restaurant_id,
         restaurant_name=restaurant_name,
         slug=slug,
         pdf_path="menu.pdf",

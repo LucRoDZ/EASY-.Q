@@ -29,13 +29,10 @@ _PNG_MAGIC = b"\x89PNG\r\n\x1a\n" + b"x" * 200
 _JPEG_MAGIC = b"\xff\xd8\xff\xe0" + b"x" * 200
 
 
-def _upload(client, content: bytes, filename: str, restaurant_name: str = "Test Resto", restaurant_id: str | None = None):
-    data = {"restaurant_name": restaurant_name}
-    if restaurant_id:
-        data["restaurant_id"] = restaurant_id
+def _upload(client, content: bytes, filename: str, restaurant_name: str = "Test Resto"):
     return client.post(
         "/api/v1/menus/upload",
-        data=data,
+        data={"restaurant_name": restaurant_name},
         files={"file": (filename, io.BytesIO(content), "application/octet-stream")},
     )
 

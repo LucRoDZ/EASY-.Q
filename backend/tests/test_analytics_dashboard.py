@@ -18,6 +18,8 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.db import Base, get_db
 from app.models import Conversation, Menu, Payment
+from app.routers.auth import require_authenticated_user
+from tests.conftest import FAKE_USER
 
 
 # ---------------------------------------------------------------------------
@@ -53,8 +55,10 @@ def client(test_db, monkeypatch):
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "init_redis", AsyncMock())
     monkeypatch.setattr(redis_core, "close_redis", AsyncMock())
+    app.dependency_overrides[require_authenticated_user] = lambda: FAKE_USER
     with TestClient(app) as c:
         yield c
+    app.dependency_overrides.pop(require_authenticated_user, None)
 
 
 @pytest.fixture
