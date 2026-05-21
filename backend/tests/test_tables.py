@@ -18,7 +18,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.db import Base, get_db
-from app.models import Table
+from app.models import Menu, Table
+from app.routers.auth import require_authenticated_user
+from tests.conftest import FAKE_USER
 
 
 # ---------------------------------------------------------------------------
@@ -53,9 +55,23 @@ def client(test_db, monkeypatch):
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "init_redis", AsyncMock())
     monkeypatch.setattr(redis_core, "close_redis", AsyncMock())
-
+    # Seed the test Menu so ownership checks pass for FAKE_USER
+    session = test_db()
+    session.add(Menu(
+        restaurant_name="Le Resto",
+        slug="le-resto",
+        pdf_path="menu.pdf",
+        languages="fr",
+        menu_data='{"sections":[]}',
+        status="ready",
+        restaurant_id="user_test123",
+    ))
+    session.commit()
+    session.close()
+    app.dependency_overrides[require_authenticated_user] = lambda: FAKE_USER
     with TestClient(app) as c:
         yield c
+    app.dependency_overrides.pop(require_authenticated_user, None)
 
 
 def _bulk_create(client, menu_slug="le-resto", count=5, start_at=1, zone=None):
@@ -117,22 +133,22 @@ def test_bulk_create_with_zone_sets_label(client):
 
 def test_bulk_create_count_zero_returns_400(client):
     """count=0 → 400."""
-    resp = client.post("/api/v1/tables/bulk", json={"menu_slug": "test", "restaurant_id": "r", "count": 0})
+    resp = client.post("/api/v1/tables/bulk", json={"menu_slug": "le-resto", "restaurant_id": "user_test123", "count": 0})
     assert resp.status_code == 400
 
 
 def test_bulk_create_count_over_200_returns_400(client):
     """count=201 → 400."""
-    resp = client.post("/api/v1/tables/bulk", json={"menu_slug": "test", "restaurant_id": "r", "count": 201})
+    resp = client.post("/api/v1/tables/bulk", json={"menu_slug": "le-resto", "restaurant_id": "user_test123", "count": 201})
     assert resp.status_code == 400
 
 
 def test_bulk_create_persists_to_db(client, test_db):
     """Tables are persisted in DB after bulk create."""
-    _bulk_create(client, menu_slug="persistance-test", count=3)
+    _bulk_create(client, menu_slug="le-resto", count=3)
 
     session = test_db()
-    tables = session.query(Table).filter(Table.menu_slug == "persistance-test").all()
+    tables = session.query(Table).filter(Table.menu_slug == "le-resto").all()
     session.close()
     assert len(tables) == 3
 
@@ -143,40 +159,39 @@ def test_bulk_create_persists_to_db(client, test_db):
 
 def test_list_tables_returns_only_active(client, test_db):
     """GET /tables?menu_slug=... returns only active tables by default."""
-    _bulk_create(client, menu_slug="list-test", count=5)
+    _bulk_create(client, menu_slug="le-resto", count=5)
 
     # Soft-delete one table
     session = test_db()
-    table = session.query(Table).filter(Table.menu_slug == "list-test").first()
+    table = session.query(Table).filter(Table.menu_slug == "le-resto").first()
     table.is_active = False
     session.commit()
     session.close()
 
-    resp = client.get("/api/v1/tables?menu_slug=list-test")
+    resp = client.get("/api/v1/tables?menu_slug=le-resto")
     assert resp.status_code == 200
     assert len(resp.json()) == 4  # 5 created, 1 deleted
 
 
 def test_list_tables_include_inactive(client, test_db):
     """GET /tables?include_inactive=true returns all tables."""
-    _bulk_create(client, menu_slug="all-tables-test", count=4)
+    _bulk_create(client, menu_slug="le-resto", count=4)
 
     session = test_db()
-    table = session.query(Table).filter(Table.menu_slug == "all-tables-test").first()
+    table = session.query(Table).filter(Table.menu_slug == "le-resto").first()
     table.is_active = False
     session.commit()
     session.close()
 
-    resp = client.get("/api/v1/tables?menu_slug=all-tables-test&include_inactive=true")
+    resp = client.get("/api/v1/tables?menu_slug=le-resto&include_inactive=true")
     assert resp.status_code == 200
     assert len(resp.json()) == 4
 
 
 def test_list_tables_empty_for_unknown_slug(client):
-    """GET /tables?menu_slug=nonexistent → empty list."""
+    """GET /tables?menu_slug=nonexistent → 403 (no menu ownership)."""
     resp = client.get("/api/v1/tables?menu_slug=nonexistent-slug")
-    assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -185,10 +200,10 @@ def test_list_tables_empty_for_unknown_slug(client):
 
 def test_get_table_by_id(client, test_db):
     """GET /tables/{id} returns full table data."""
-    _bulk_create(client, menu_slug="get-test", count=1)
+    _bulk_create(client, menu_slug="le-resto", count=1)
 
     session = test_db()
-    table = session.query(Table).filter(Table.menu_slug == "get-test").first()
+    table = session.query(Table).filter(Table.menu_slug == "le-resto").first()
     table_id = table.id
     session.close()
 
@@ -196,7 +211,7 @@ def test_get_table_by_id(client, test_db):
     assert resp.status_code == 200
     body = resp.json()
     assert body["id"] == table_id
-    assert body["menu_slug"] == "get-test"
+    assert body["menu_slug"] == "le-resto"
 
 
 def test_get_table_not_found_returns_404(client):
@@ -211,9 +226,9 @@ def test_get_table_not_found_returns_404(client):
 
 def test_get_qr_returns_png(client, test_db):
     """GET /tables/{id}/qr returns image/png response."""
-    _bulk_create(client, menu_slug="qr-test", count=1)
+    _bulk_create(client, menu_slug="le-resto", count=1)
     session = test_db()
-    table = session.query(Table).filter(Table.menu_slug == "qr-test").first()
+    table = session.query(Table).filter(Table.menu_slug == "le-resto").first()
     table_id = table.id
     session.close()
 
@@ -235,9 +250,9 @@ def test_get_qr_not_found_returns_404(client):
 
 def test_patch_table_updates_label(client, test_db):
     """PATCH /tables/{id} updates the label field."""
-    _bulk_create(client, menu_slug="patch-test", count=1)
+    _bulk_create(client, menu_slug="le-resto", count=1)
     session = test_db()
-    table_id = session.query(Table).filter(Table.menu_slug == "patch-test").first().id
+    table_id = session.query(Table).filter(Table.menu_slug == "le-resto").first().id
     session.close()
 
     resp = client.patch(f"/api/v1/tables/{table_id}", json={"label": "Bar"})
@@ -247,9 +262,9 @@ def test_patch_table_updates_label(client, test_db):
 
 def test_patch_table_updates_capacity(client, test_db):
     """PATCH /tables/{id} updates capacity."""
-    _bulk_create(client, menu_slug="cap-test", count=1)
+    _bulk_create(client, menu_slug="le-resto", count=1)
     session = test_db()
-    table_id = session.query(Table).filter(Table.menu_slug == "cap-test").first().id
+    table_id = session.query(Table).filter(Table.menu_slug == "le-resto").first().id
     session.close()
 
     resp = client.patch(f"/api/v1/tables/{table_id}", json={"capacity": 8})
@@ -259,9 +274,9 @@ def test_patch_table_updates_capacity(client, test_db):
 
 def test_patch_table_updates_status(client, test_db):
     """PATCH /tables/{id} with status updates table status."""
-    _bulk_create(client, menu_slug="status-test", count=1)
+    _bulk_create(client, menu_slug="le-resto", count=1)
     session = test_db()
-    table_id = session.query(Table).filter(Table.menu_slug == "status-test").first().id
+    table_id = session.query(Table).filter(Table.menu_slug == "le-resto").first().id
     session.close()
 
     resp = client.patch(f"/api/v1/tables/{table_id}", json={"status": "occupied"})
@@ -271,9 +286,9 @@ def test_patch_table_updates_status(client, test_db):
 
 def test_patch_table_status_cycles(client, test_db):
     """Status can be set to occupied, reserved, or available."""
-    _bulk_create(client, menu_slug="status-cycle", count=1)
+    _bulk_create(client, menu_slug="le-resto", count=1)
     session = test_db()
-    table_id = session.query(Table).filter(Table.menu_slug == "status-cycle").first().id
+    table_id = session.query(Table).filter(Table.menu_slug == "le-resto").first().id
     session.close()
 
     for status in ("occupied", "reserved", "available"):
@@ -294,9 +309,9 @@ def test_patch_table_not_found_returns_404(client):
 
 def test_delete_table_sets_is_active_false(client, test_db):
     """DELETE /tables/{id} soft-deletes (is_active=False)."""
-    _bulk_create(client, menu_slug="delete-test", count=1)
+    _bulk_create(client, menu_slug="le-resto", count=1)
     session = test_db()
-    table_id = session.query(Table).filter(Table.menu_slug == "delete-test").first().id
+    table_id = session.query(Table).filter(Table.menu_slug == "le-resto").first().id
     session.close()
 
     resp = client.delete(f"/api/v1/tables/{table_id}")
@@ -314,9 +329,9 @@ def test_delete_table_sets_is_active_false(client, test_db):
 
 def test_export_qr_pdf_returns_pdf(client, test_db):
     """GET /tables/export/qr-pdf returns application/pdf."""
-    _bulk_create(client, menu_slug="pdf-export-test", count=6)
+    _bulk_create(client, menu_slug="le-resto", count=6)
 
-    resp = client.get("/api/v1/tables/export/qr-pdf?menu_slug=pdf-export-test&restaurant_name=Test+Resto")
+    resp = client.get("/api/v1/tables/export/qr-pdf?menu_slug=le-resto&restaurant_name=Test+Resto")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
     assert len(resp.content) > 500  # actual PDF bytes
@@ -324,5 +339,5 @@ def test_export_qr_pdf_returns_pdf(client, test_db):
 
 def test_export_qr_pdf_no_tables_returns_404(client):
     """GET /tables/export/qr-pdf for slug with no tables → 404."""
-    resp = client.get("/api/v1/tables/export/qr-pdf?menu_slug=empty-slug")
+    resp = client.get("/api/v1/tables/export/qr-pdf?menu_slug=le-resto")
     assert resp.status_code == 404

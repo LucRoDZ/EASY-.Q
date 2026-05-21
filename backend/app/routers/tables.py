@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session
 
 from app.config import BASE_URL, STORAGE_DIR
 from app.db import get_db
-from app.models import RestaurantProfile, Table
+from app.models import Menu, RestaurantProfile, Table
+from app.routers.auth import require_authenticated_user
 from app.schemas import TableCreateBulk, TableResponse, TableUpdateBody
 from app.services.pdf_service import generate_qr_pdf
 from app.services.qr_service import generate_table_qr_bytes
@@ -86,8 +87,12 @@ def _table_to_response(t: Table) -> TableResponse:
 def create_tables_bulk(
     body: TableCreateBulk,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> list[TableResponse]:
     """Create `count` tables numbered {prefix} {start_at} … {start_at + count - 1}."""
+    menu = db.query(Menu).filter(Menu.slug == body.menu_slug).first()
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     if body.count < 1 or body.count > 200:
         raise HTTPException(status_code=400, detail="count must be between 1 and 200")
 
@@ -122,7 +127,11 @@ def list_tables(
     menu_slug: str = Query(..., description="Menu slug to filter tables"),
     include_inactive: bool = Query(False),
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> list[TableResponse]:
+    menu = db.query(Menu).filter(Menu.slug == menu_slug).first()
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     q = db.query(Table).filter(Table.menu_slug == menu_slug)
     if not include_inactive:
         q = q.filter(Table.is_active.is_(True))
@@ -142,8 +151,12 @@ def export_qr_pdf(
     back_color: str = Query("white", description="QR background color (hex or named)"),
     logo: bool = Query(False, description="Overlay restaurant logo on QR codes"),
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> Response:
     """Download a printable A4 PDF with QR codes for all active tables."""
+    menu = db.query(Menu).filter(Menu.slug == menu_slug).first()
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     tables = (
         db.query(Table)
         .filter(Table.menu_slug == menu_slug, Table.is_active.is_(True))
@@ -171,10 +184,17 @@ def export_qr_pdf(
 # ---------------------------------------------------------------------------
 
 @router.get("/{table_id}", response_model=TableResponse)
-def get_table(table_id: int, db: Session = Depends(get_db)) -> TableResponse:
+def get_table(
+    table_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+) -> TableResponse:
     table = db.query(Table).filter(Table.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
+    menu = db.query(Menu).filter(Menu.slug == table.menu_slug).first()
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     return _table_to_response(table)
 
 
@@ -189,6 +209,7 @@ def get_table_qr(
     back_color: str = Query("white", description="QR background color (hex or named)"),
     logo: bool = Query(False, description="Overlay restaurant logo in center"),
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> Response:
     """Return the QR code as a PNG image (for use as <img src=...>).
 
@@ -200,6 +221,9 @@ def get_table_qr(
     table = db.query(Table).filter(Table.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
+    menu = db.query(Menu).filter(Menu.slug == table.menu_slug).first()
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     fill = _validate_color(fill_color, "black")
     back = _validate_color(back_color, "white")
@@ -224,10 +248,14 @@ def update_table(
     table_id: int,
     body: TableUpdateBody,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> TableResponse:
     table = db.query(Table).filter(Table.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
+    menu = db.query(Menu).filter(Menu.slug == table.menu_slug).first()
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     if body.number is not None:
         table.number = body.number
@@ -252,9 +280,16 @@ def update_table(
 # ---------------------------------------------------------------------------
 
 @router.delete("/{table_id}", status_code=204)
-def delete_table(table_id: int, db: Session = Depends(get_db)) -> None:
+def delete_table(
+    table_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+) -> None:
     table = db.query(Table).filter(Table.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
+    menu = db.query(Menu).filter(Menu.slug == table.menu_slug).first()
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
     table.is_active = False
     db.commit()
