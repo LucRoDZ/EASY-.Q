@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import AuditLog, Conversation, Menu, Table
 from app.services.conversation_service import (
+    list_menu_conversations,
     parse_conversation_messages,
 )
 from app.services.menu_service import get_menu_by_slug
@@ -17,7 +18,8 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 def _assert_owns_menu(menu: Menu, user: dict) -> None:
     """Raise 403 if the authenticated user does not own this menu."""
-    _assert_owns_menu(menu, user)
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
 def _parse_menu_counts(menu_data_json: str | None) -> tuple[int, int]:
