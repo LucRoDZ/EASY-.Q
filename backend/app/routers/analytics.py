@@ -22,6 +22,7 @@ from app.db import get_db
 from app.models import Conversation, Payment
 from app.services.menu_service import get_menu_by_slug
 from app.routers.subscriptions import require_pro
+from app.routers.auth import require_authenticated_user
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
@@ -80,15 +81,17 @@ def get_analytics_summary(
     period: str = "7d",
     from_date: str | None = None,
     to_date: str | None = None,
-    restaurant_id: str | None = None,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ):
     """Combined analytics summary for the restaurant dashboard. Requires Pro plan."""
-    if restaurant_id:
-        require_pro(restaurant_id, db)
+    restaurant_id = user["sub"]
+    require_pro(restaurant_id, db)
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     start, end = _parse_period(period, from_date, to_date)
     prev_start, prev_end = _prev_period(start, end)
@@ -187,15 +190,17 @@ def get_revenue_analytics(
     period: str = "7d",
     from_date: str | None = None,
     to_date: str | None = None,
-    restaurant_id: str | None = None,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ):
     """Daily revenue breakdown. Requires Pro plan."""
-    if restaurant_id:
-        require_pro(restaurant_id, db)
+    restaurant_id = user["sub"]
+    require_pro(restaurant_id, db)
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     start, end = _parse_period(period, from_date, to_date)
 
@@ -235,15 +240,17 @@ def get_covers_analytics(
     period: str = "7d",
     from_date: str | None = None,
     to_date: str | None = None,
-    restaurant_id: str | None = None,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ):
     """Daily covers (unique table sessions). Requires Pro plan."""
-    if restaurant_id:
-        require_pro(restaurant_id, db)
+    restaurant_id = user["sub"]
+    require_pro(restaurant_id, db)
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     start, end = _parse_period(period, from_date, to_date)
 
@@ -288,15 +295,17 @@ def get_chatbot_analytics(
     period: str = "7d",
     from_date: str | None = None,
     to_date: str | None = None,
-    restaurant_id: str | None = None,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ):
     """Chatbot session and message metrics. Requires Pro plan."""
-    if restaurant_id:
-        require_pro(restaurant_id, db)
+    restaurant_id = user["sub"]
+    require_pro(restaurant_id, db)
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     start, end = _parse_period(period, from_date, to_date)
 
@@ -347,15 +356,17 @@ def get_items_analytics(
     period: str = "7d",
     from_date: str | None = None,
     to_date: str | None = None,
-    restaurant_id: str | None = None,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ):
     """Top items sold by quantity and revenue. Requires Pro plan."""
-    if restaurant_id:
-        require_pro(restaurant_id, db)
+    restaurant_id = user["sub"]
+    require_pro(restaurant_id, db)
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     start, end = _parse_period(period, from_date, to_date)
 
@@ -398,8 +409,8 @@ def export_analytics_csv(
     from_date: str,
     to_date: str,
     format: str = "csv",
-    restaurant_id: str | None = None,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ):
     """Export payment transactions as CSV for accounting (Sage/QuickBooks/EBP compatible).
 
@@ -409,12 +420,14 @@ def export_analytics_csv(
     if format != "csv":
         raise HTTPException(status_code=400, detail="Only format=csv is supported")
 
-    if restaurant_id:
-        require_pro(restaurant_id, db)
+    restaurant_id = user["sub"]
+    require_pro(restaurant_id, db)
 
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     try:
         start = datetime.fromisoformat(from_date).replace(tzinfo=timezone.utc)

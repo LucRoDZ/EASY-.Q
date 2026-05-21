@@ -17,7 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.db import Base, get_db
-from app.models import Conversation, Menu, Payment
+from app.models import Conversation, Menu, Payment, Subscription
 from app.routers.auth import require_authenticated_user
 from tests.conftest import FAKE_USER
 
@@ -55,6 +55,11 @@ def client(test_db, monkeypatch):
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "init_redis", AsyncMock())
     monkeypatch.setattr(redis_core, "close_redis", AsyncMock())
+    # Seed a Pro subscription so require_pro passes for FAKE_USER in all tests
+    session = test_db()
+    session.add(Subscription(restaurant_id="user_test123", plan="pro", status="active"))
+    session.commit()
+    session.close()
     app.dependency_overrides[require_authenticated_user] = lambda: FAKE_USER
     with TestClient(app) as c:
         yield c
@@ -72,6 +77,7 @@ def slug(test_db):
         languages="fr,en",
         menu_data=json.dumps({"sections": []}),
         status="ready",
+        restaurant_id="user_test123",
     )
     session.add(m)
     session.commit()
