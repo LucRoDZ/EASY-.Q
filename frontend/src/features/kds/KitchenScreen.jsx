@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Loader2, Wifi, WifiOff, ChefHat } from 'lucide-react';
-import { api } from '../../../api';
+import { api } from '../../api';
 
 // ---------------------------------------------------------------------------
 // Constants
