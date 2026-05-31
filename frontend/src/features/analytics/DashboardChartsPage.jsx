@@ -20,6 +20,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import {
   BarChart2, Users, ShoppingBag, MessageSquare,
   TrendingUp, TrendingDown, Minus, ArrowLeft, Loader2,
@@ -296,6 +297,7 @@ function PeriodPicker({ period, onChange }) {
 
 export default function DashboardChartsPage() {
   const [searchParams] = useSearchParams();
+  const { getToken } = useAuth();
   const slug = searchParams.get('slug') || '';
   const [period, setPeriod] = useState('7d');
 
@@ -317,12 +319,13 @@ export default function DashboardChartsPage() {
     setLoading(true);
     setError('');
     try {
+      const token = await getToken();
       const [sumData, revData, covData, chatData, itemData] = await Promise.all([
-        api.getAnalyticsSummary(slug, period),
-        api.getAnalyticsRevenue(slug, period),
-        api.getAnalyticsCovers(slug, period),
-        api.getAnalyticsChatbot(slug, period),
-        api.getAnalyticsItems(slug, period),
+        api.getAnalyticsSummary(slug, period, token),
+        api.getAnalyticsRevenue(slug, period, token),
+        api.getAnalyticsCovers(slug, period, token),
+        api.getAnalyticsChatbot(slug, period, token),
+        api.getAnalyticsItems(slug, period, token),
       ]);
       setSummary(sumData);
       setRevenue(revData);
@@ -334,7 +337,7 @@ export default function DashboardChartsPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug, period]);
+  }, [slug, period, getToken]);
 
   useEffect(() => {
     load();
@@ -344,11 +347,12 @@ export default function DashboardChartsPage() {
     if (!slug || exporting) return;
     setExporting(true);
     try {
+      const token = await getToken();
       const now = new Date();
       const days = period === '30d' ? 30 : 7;
       const from = new Date(now - days * 86400_000).toISOString().slice(0, 10);
       const to = now.toISOString().slice(0, 10);
-      await api.exportAnalyticsCsv(slug, from, to);
+      await api.exportAnalyticsCsv(slug, from, to, token);
     } catch (err) {
       // silent — download just doesn't start
     } finally {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import {
   Loader2, Download, Plus, QrCode, Trash2, AlertCircle, Palette, ChevronDown, ChevronUp,
   LayoutGrid, List,
@@ -217,14 +218,15 @@ function AddTablesForm({ menuSlug, onAdded }) {
 
 // ─── TableCard ────────────────────────────────────────────────────────────────
 
-function TableCard({ table, qrSrc, onDelete }) {
+function TableCard({ table, qrSrc, onDelete, getToken }) {
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
     if (!confirm(`Supprimer la table ${table.number} ?`)) return;
     setDeleting(true);
     try {
-      await api.deleteTable(table.id);
+      const token = await getToken().catch(() => null);
+      await api.deleteTable(table.id, token);
       onDelete(table.id);
     } catch {
       setDeleting(false);
@@ -488,6 +490,7 @@ function FloorPlanEditor({ tables, menuSlug }) {
 
 export default function TablesPage() {
   const { menuSlug } = useParams();
+  const { getToken } = useAuth();
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -503,11 +506,12 @@ export default function TablesPage() {
 
   useEffect(() => {
     if (!menuSlug) return;
-    api.listTables(menuSlug)
+    getToken()
+      .then((token) => api.listTables(menuSlug, false, token))
       .then(setTables)
       .catch((err) => setLoadError(err.message || 'Impossible de charger les tables'))
       .finally(() => setLoading(false));
-  }, [menuSlug]);
+  }, [menuSlug, getToken]);
 
   // ── Build QR URL with current settings ────────────────────────────────────
 
@@ -636,6 +640,7 @@ export default function TablesPage() {
                   table={table}
                   qrSrc={qrSrc(table)}
                   onDelete={handleDelete}
+                  getToken={getToken}
                 />
               ))}
             </div>

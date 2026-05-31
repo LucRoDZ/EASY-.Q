@@ -199,16 +199,21 @@ export const api = {
     return res.json();
   },
 
-  async listTables(menuSlug, includeInactive = false) {
+  async listTables(menuSlug, includeInactive = false, token) {
     const params = new URLSearchParams({ menu_slug: menuSlug });
     if (includeInactive) params.set('include_inactive', 'true');
-    const res = await fetch(`${API_BASE}/api/v1/tables?${params}`);
+    const res = await fetch(`${API_BASE}/api/v1/tables?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error(`Failed to load tables (${res.status})`);
     return res.json();
   },
 
-  async deleteTable(tableId) {
-    const res = await fetch(`${API_BASE}/api/v1/tables/${tableId}`, { method: 'DELETE' });
+  async deleteTable(tableId, token) {
+    const res = await fetch(`${API_BASE}/api/v1/tables/${tableId}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Delete failed (${res.status})`);
@@ -343,39 +348,51 @@ export const api = {
     return res.json();
   },
 
-  async getAnalyticsSummary(slug, period = '7d') {
-    const res = await fetch(`${API_BASE}/api/v1/analytics/summary?slug=${encodeURIComponent(slug)}&period=${period}`);
+  async getAnalyticsSummary(slug, period = '7d', token) {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/summary?slug=${encodeURIComponent(slug)}&period=${period}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to load analytics summary');
     return res.json();
   },
 
-  async getAnalyticsRevenue(slug, period = '7d') {
-    const res = await fetch(`${API_BASE}/api/v1/analytics/revenue?slug=${encodeURIComponent(slug)}&period=${period}`);
+  async getAnalyticsRevenue(slug, period = '7d', token) {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/revenue?slug=${encodeURIComponent(slug)}&period=${period}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to load revenue analytics');
     return res.json();
   },
 
-  async getAnalyticsChatbot(slug, period = '7d') {
-    const res = await fetch(`${API_BASE}/api/v1/analytics/chatbot?slug=${encodeURIComponent(slug)}&period=${period}`);
+  async getAnalyticsChatbot(slug, period = '7d', token) {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/chatbot?slug=${encodeURIComponent(slug)}&period=${period}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to load chatbot analytics');
     return res.json();
   },
 
-  async getAnalyticsItems(slug, period = '7d') {
-    const res = await fetch(`${API_BASE}/api/v1/analytics/items?slug=${encodeURIComponent(slug)}&period=${period}`);
+  async getAnalyticsItems(slug, period = '7d', token) {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/items?slug=${encodeURIComponent(slug)}&period=${period}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to load items analytics');
     return res.json();
   },
 
-  async getAnalyticsCovers(slug, period = '7d') {
-    const res = await fetch(`${API_BASE}/api/v1/analytics/covers?slug=${encodeURIComponent(slug)}&period=${period}`);
+  async getAnalyticsCovers(slug, period = '7d', token) {
+    const res = await fetch(`${API_BASE}/api/v1/analytics/covers?slug=${encodeURIComponent(slug)}&period=${period}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to load covers analytics');
     return res.json();
   },
 
-  async exportAnalyticsCsv(slug, from, to) {
+  async exportAnalyticsCsv(slug, from, to, token) {
     const params = new URLSearchParams({ slug, from_date: from, to_date: to, format: 'csv' });
-    const res = await fetch(`${API_BASE}/api/v1/analytics/export?${params}`);
+    const res = await fetch(`${API_BASE}/api/v1/analytics/export?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Export failed (${res.status})`);

@@ -3,6 +3,10 @@ import { render } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import DashboardChartsPage from './DashboardChartsPage';
 
+vi.mock('@clerk/clerk-react', () => ({
+  useAuth: () => ({ getToken: vi.fn().mockResolvedValue('test-token') }),
+}));
+
 vi.mock('../../api', () => ({
   api: {
     getAnalyticsSummary: vi.fn().mockResolvedValue({ revenue: 0, covers: 0, avg_basket: 0, tips: 0 }),
