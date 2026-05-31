@@ -2,17 +2,18 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
+
 export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test-setup.js'],
     exclude: ['**/node_modules/**', '**/e2e/**'],
-    pool: 'forks',
   },
   plugins: [
     react(),
-    VitePWA({
+    !isTest && VitePWA({
       registerType: 'autoUpdate',
 
       // Inject service worker registration into the app shell
@@ -107,7 +108,7 @@ export default defineConfig({
         ],
       },
     }),
-  ],
+  ].filter(Boolean),
 
   build: {
     // Code splitting: vendor chunks for better caching

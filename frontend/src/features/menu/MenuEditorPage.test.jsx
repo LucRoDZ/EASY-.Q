@@ -7,7 +7,7 @@ import MenuEditorPage from './MenuEditorPage';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 vi.mock('@clerk/clerk-react', () => ({
-  useAuth: () => ({ getToken: vi.fn().mockResolvedValue('test-token') }),
+  useAuth: () => ({ getToken: vi.fn().mockReturnValue(Promise.resolve('test-token')) }),
 }));
 
 vi.mock('../../api', () => ({
