@@ -86,8 +86,6 @@ def get_analytics_summary(
     user: dict = Depends(require_authenticated_user),
 ):
     """Combined analytics summary for the restaurant dashboard. Requires Pro plan."""
-    restaurant_id = user["sub"]
-
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -195,8 +193,6 @@ def get_revenue_analytics(
     user: dict = Depends(require_authenticated_user),
 ):
     """Daily revenue breakdown. Requires Pro plan."""
-    restaurant_id = user["sub"]
-
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -245,8 +241,6 @@ def get_covers_analytics(
     user: dict = Depends(require_authenticated_user),
 ):
     """Daily covers (unique table sessions). Requires Pro plan."""
-    restaurant_id = user["sub"]
-
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -300,8 +294,6 @@ def get_chatbot_analytics(
     user: dict = Depends(require_authenticated_user),
 ):
     """Chatbot session and message metrics. Requires Pro plan."""
-    restaurant_id = user["sub"]
-
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -361,8 +353,6 @@ def get_items_analytics(
     user: dict = Depends(require_authenticated_user),
 ):
     """Top items sold by quantity and revenue. Requires Pro plan."""
-    restaurant_id = user["sub"]
-
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -420,9 +410,6 @@ def export_analytics_csv(
     """
     if format != "csv":
         raise HTTPException(status_code=400, detail="Only format=csv is supported")
-
-    restaurant_id = user["sub"]
-
 
     menu = get_menu_by_slug(db, slug)
     if not menu:
