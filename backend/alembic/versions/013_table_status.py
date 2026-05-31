@@ -15,14 +15,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    conn = op.get_bind()
-    cols = [r[0] for r in conn.execute(sa.text(
-        "SELECT column_name FROM information_schema.columns WHERE table_name='tables'"
-    ))]
-    if "status" not in cols:
-        op.add_column("tables", sa.Column(
-            "status", sa.String(20), nullable=False, server_default="available"
-        ))
+    op.execute(sa.text(
+        "ALTER TABLE tables ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'available'"
+    ))
 
 
 def downgrade() -> None:
