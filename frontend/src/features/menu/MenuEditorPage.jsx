@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import {
   Loader2, Plus, Save, Eye, AlertCircle, CheckCircle2,
   Copy, Smartphone, Globe
@@ -105,6 +106,7 @@ function MobilePreview({ restaurantName, sections }) {
 
 export default function MenuEditorPage() {
   const { menuId } = useParams();
+  const { getToken } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -129,7 +131,8 @@ export default function MenuEditorPage() {
   // ── Load ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    api.getMenuById(menuId)
+    getToken()
+      .then((token) => api.getMenuById(menuId, token))
       .then((data) => {
         setRestaurantName(data.restaurant_name || '');
         setSlug(data.slug || '');
@@ -139,7 +142,7 @@ export default function MenuEditorPage() {
       })
       .catch((err) => setLoadError(err.message || 'Impossible de charger le menu'))
       .finally(() => setLoading(false));
-  }, [menuId]);
+  }, [menuId, getToken]);
 
   // ── Auto-save ─────────────────────────────────────────────────────────────
 
@@ -147,17 +150,14 @@ export default function MenuEditorPage() {
     async (name, secs, ws) => {
       setSaveStatus('saving');
       try {
-        await api.updateMenu(menuId, {
-          restaurant_name: name,
-          sections: secs,
-          wines: ws,
-        });
+        const token = await getToken();
+        await api.updateMenu(menuId, { restaurant_name: name, sections: secs, wines: ws }, token);
         setSaveStatus('saved');
       } catch {
         setSaveStatus('error');
       }
     },
-    [menuId],
+    [menuId, getToken],
   );
 
   const scheduleAutoSave = useCallback(
@@ -213,8 +213,9 @@ export default function MenuEditorPage() {
   const handlePublishToggle = async () => {
     setPublishing(true);
     try {
+      const token = await getToken();
       const next = publishStatus === 'published' ? 'draft' : 'published';
-      await api.publishMenu(menuId, next);
+      await api.publishMenu(menuId, next, token);
       setPublishStatus(next);
     } catch {
       // silently ignore — user can retry
@@ -226,7 +227,8 @@ export default function MenuEditorPage() {
   const handleDuplicate = async () => {
     setDuplicating(true);
     try {
-      const result = await api.duplicateMenu(menuId);
+      const token = await getToken();
+      const result = await api.duplicateMenu(menuId, token);
       navigate(`/menus/${result.menu_id}/edit`);
     } catch {
       setDuplicating(false);

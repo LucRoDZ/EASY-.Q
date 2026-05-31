@@ -10,6 +10,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import {
   Loader2, ArrowLeft, Search, Download, ChevronDown, ChevronUp,
   MessageSquare, Smile, Frown, Minus,
@@ -176,6 +177,7 @@ function ConversationCard({ conv }) {
 
 export default function DashboardConversationsPage() {
   const { slug } = useParams();
+  const { getToken } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -187,7 +189,8 @@ export default function DashboardConversationsPage() {
       setLoading(true);
       setError('');
       try {
-        const response = await api.getDashboardConversations(slug);
+        const token = await getToken();
+        const response = await api.getDashboardConversations(slug, token);
         setData(response);
       } catch (err) {
         setError(err.message || 'Impossible de charger les conversations.');
@@ -196,7 +199,7 @@ export default function DashboardConversationsPage() {
       }
     };
     load();
-  }, [slug]);
+  }, [slug, getToken]);
 
   const allConversations = data?.conversations || [];
 

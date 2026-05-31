@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import { Loader2, CheckCircle, ArrowLeft, Zap, CreditCard } from 'lucide-react';
 import { api } from '../../api';
 
@@ -28,6 +29,7 @@ const PRO_FEATURES = [
 
 export default function SubscriptionPage() {
   const [searchParams] = useSearchParams();
+  const { getToken } = useAuth();
   const restaurantId = searchParams.get('restaurant_id') || '';
 
   const [sub, setSub] = useState(null);
@@ -40,11 +42,12 @@ export default function SubscriptionPage() {
       setLoading(false);
       return;
     }
-    api.getSubscription(restaurantId)
+    getToken()
+      .then((token) => api.getSubscription(restaurantId, token))
       .then(setSub)
       .catch(() => setSub(null))
       .finally(() => setLoading(false));
-  }, [restaurantId]);
+  }, [restaurantId, getToken]);
 
   const isPro = sub?.plan === 'pro' && sub?.status === 'active';
 
@@ -53,7 +56,8 @@ export default function SubscriptionPage() {
     setActionLoading(true);
     setError('');
     try {
-      const data = await api.createSubscriptionCheckout(restaurantId);
+      const token = await getToken();
+      const data = await api.createSubscriptionCheckout(restaurantId, '', token);
       if (data.already_pro) {
         setSub((s) => ({ ...s, plan: 'pro', status: 'active' }));
         return;
@@ -71,7 +75,8 @@ export default function SubscriptionPage() {
     setActionLoading(true);
     setError('');
     try {
-      const data = await api.createSubscriptionPortal(restaurantId);
+      const token = await getToken();
+      const data = await api.createSubscriptionPortal(restaurantId, token);
       if (data.portal_url) window.location.href = data.portal_url;
     } catch (err) {
       setError(err.message || 'Une erreur est survenue.');

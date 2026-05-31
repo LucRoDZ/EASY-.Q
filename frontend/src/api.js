@@ -130,24 +130,31 @@ export const api = {
   },
 
   // Poll OCR status — returns {menu_id, slug, status, ocr_error?, menu_data?}
-  async getMenuStatus(menuId) {
-    const res = await fetch(`${API_BASE}/api/v1/menus/${menuId}/status`);
+  async getMenuStatus(menuId, token) {
+    const res = await fetch(`${API_BASE}/api/v1/menus/${menuId}/status`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error(`Status check failed (${res.status})`);
     return res.json();
   },
 
   // Editor: load full menu data
-  async getMenuById(menuId) {
-    const res = await fetch(`${API_BASE}/api/v1/menus/${menuId}`);
+  async getMenuById(menuId, token) {
+    const res = await fetch(`${API_BASE}/api/v1/menus/${menuId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error(`Menu not found (${res.status})`);
     return res.json();
   },
 
   // Editor: save sections/wines
-  async updateMenu(menuId, body) {
+  async updateMenu(menuId, body, token) {
     const res = await fetch(`${API_BASE}/api/v1/menus/${menuId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(body),
     });
     if (!res.ok) {
@@ -158,10 +165,11 @@ export const api = {
   },
 
   // Editor: toggle publish status ('draft' | 'published')
-  async publishMenu(menuId, publishStatus) {
+  async publishMenu(menuId, publishStatus, token) {
     const params = new URLSearchParams({ publish_status: publishStatus });
     const res = await fetch(`${API_BASE}/api/v1/menus/${menuId}/publish?${params}`, {
       method: 'PATCH',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -171,9 +179,10 @@ export const api = {
   },
 
   // Editor: duplicate a menu — returns { menu_id, slug }
-  async duplicateMenu(menuId) {
+  async duplicateMenu(menuId, token) {
     const res = await fetch(`${API_BASE}/api/v1/menus/${menuId}/duplicate`, {
       method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -304,23 +313,30 @@ export const api = {
     return res.json();
   },
 
-  async getDashboardConversations(slug) {
-    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/conversations`);
+  async getDashboardConversations(slug, token) {
+    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/conversations`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to load conversations');
     return res.json();
   },
 
   // Subscriptions
-  async getSubscription(restaurantId) {
-    const res = await fetch(`${API_BASE}/api/v1/subscriptions/${encodeURIComponent(restaurantId)}`);
+  async getSubscription(restaurantId, token) {
+    const res = await fetch(`${API_BASE}/api/v1/subscriptions/${encodeURIComponent(restaurantId)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to load subscription');
     return res.json();
   },
 
-  async createSubscriptionCheckout(restaurantId, customerEmail = '') {
+  async createSubscriptionCheckout(restaurantId, customerEmail = '', token) {
     const res = await fetch(`${API_BASE}/api/v1/subscriptions/create-checkout`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ restaurant_id: restaurantId, customer_email: customerEmail }),
     });
     if (!res.ok) {
@@ -330,10 +346,13 @@ export const api = {
     return res.json();
   },
 
-  async createSubscriptionPortal(restaurantId) {
+  async createSubscriptionPortal(restaurantId, token) {
     const res = await fetch(`${API_BASE}/api/v1/subscriptions/portal`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ restaurant_id: restaurantId }),
     });
     if (!res.ok) throw new Error('Failed to create portal session');

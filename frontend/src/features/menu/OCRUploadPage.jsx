@@ -81,7 +81,8 @@ export default function OCRUploadPage() {
         return;
       }
       try {
-        const data = await api.getMenuStatus(id);
+        const token = await getToken().catch(() => null);
+        const data = await api.getMenuStatus(id, token);
         setOcrStatus(data.status);
         if (data.status === 'ready') {
           clearInterval(pollRef.current);

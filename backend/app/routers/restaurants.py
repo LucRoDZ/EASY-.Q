@@ -261,7 +261,8 @@ def complete_onboarding(
 ) -> dict:
     """Upsert RestaurantProfile and record onboarding completion in AuditLog."""
     slug = body.slug or _slugify(body.restaurant_name)
-    owner_email = body.owner_email or current_user.get("email", "")
+    raw_email = body.owner_email or current_user.get("email", "")
+    owner_email = raw_email if "@" in raw_email and "{{" not in raw_email else ""
 
     # Upsert profile
     profile = db.query(RestaurantProfile).filter(RestaurantProfile.slug == slug).first()
