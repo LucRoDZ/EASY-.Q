@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import MenuEditorPage from './MenuEditorPage';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+const mockGetToken = vi.fn().mockResolvedValue('test-token');
+
 vi.mock('@clerk/clerk-react', () => ({
-  useAuth: () => ({ getToken: vi.fn().mockReturnValue(Promise.resolve('test-token')) }),
+  useAuth: () => ({ getToken: mockGetToken }),
 }));
 
 vi.mock('../../api', () => ({
@@ -143,103 +144,84 @@ describe('MenuEditorPage', () => {
   });
 
   it('can add a new section', async () => {
-    const user = userEvent.setup();
     renderEditor();
     await waitFor(() => screen.getByDisplayValue('Entrées'));
 
-    await user.click(screen.getByText('Ajouter une section'));
+    fireEvent.click(screen.getByText('Ajouter une section'));
     expect(screen.getByDisplayValue('Nouvelle section')).toBeInTheDocument();
   });
 
   it('can edit section title', async () => {
-    const user = userEvent.setup();
     renderEditor();
     await waitFor(() => screen.getByDisplayValue('Entrées'));
 
     const input = screen.getByDisplayValue('Entrées');
-    await user.clear(input);
-    await user.type(input, 'Starters');
+    fireEvent.change(input, { target: { value: 'Starters' } });
     expect(screen.getByDisplayValue('Starters')).toBeInTheDocument();
   });
 
   it('can delete a section', async () => {
-    const user = userEvent.setup();
     renderEditor();
     await waitFor(() => screen.getByDisplayValue('Plats'));
 
-    // Find the delete button for the "Plats" section — it's the Trash2 icon button
-    // Sections appear in order, so the 2nd delete button is for "Plats"
-    const deleteButtons = screen.getAllByRole('button', { name: '' }).filter(
-      (btn) => btn.querySelector('svg')
-    );
-    // Click the delete button associated with the Plats section header
     const platsInput = screen.getByDisplayValue('Plats');
     const sectionHeader = platsInput.closest('div');
     const trashBtn = sectionHeader.querySelector('button:last-child');
-    await user.click(trashBtn);
+    fireEvent.click(trashBtn);
 
     await waitFor(() => expect(screen.queryByDisplayValue('Plats')).not.toBeInTheDocument());
   });
 
   it('can add an item to a section', async () => {
-    const user = userEvent.setup();
     renderEditor();
     await waitFor(() => screen.getAllByText('Ajouter un plat'));
 
     const addButtons = screen.getAllByText('Ajouter un plat');
-    await user.click(addButtons[0]); // first section
+    fireEvent.click(addButtons[0]);
 
     const placeholders = screen.getAllByPlaceholderText('Nom du plat');
-    // There were 2 items in section 1, now there should be 3 (one empty)
     expect(placeholders.length).toBeGreaterThan(2);
   });
 
   it('expands item row to show allergen toggles', async () => {
-    const user = userEvent.setup();
     renderEditor();
     await waitFor(() => screen.getByDisplayValue('Salade César'));
 
-    // Find the Salade César item row flex container and click its expand button
     const caesarInput = screen.getByDisplayValue('Salade César');
     const flexRow = caesarInput.parentElement;
     const [expandBtn] = flexRow.querySelectorAll('button');
-    await user.click(expandBtn);
+    fireEvent.click(expandBtn);
 
     expect(screen.getByText('Allergènes')).toBeInTheDocument();
     expect(screen.getByText('Tags')).toBeInTheDocument();
   });
 
   it('toggles allergen on an item', async () => {
-    const user = userEvent.setup();
     renderEditor();
     await waitFor(() => screen.getByDisplayValue('Soupe'));
 
-    // Expand Soupe via its flex row expand button
     const soupeInput = screen.getByDisplayValue('Soupe');
     const flexRow = soupeInput.parentElement;
     const [expandBtn] = flexRow.querySelectorAll('button');
-    await user.click(expandBtn);
+    fireEvent.click(expandBtn);
 
-    // Click "gluten" allergen pill (first one found in the expanded section)
     const glutenPill = screen.getAllByText('gluten')[0];
-    await user.click(glutenPill);
+    fireEvent.click(glutenPill);
 
-    // gluten pill should now be active (bg-neutral-800)
     expect(glutenPill.closest('button').className).toContain('bg-neutral-800');
   });
 
   it('toggles a tag on an item', async () => {
-    const user = userEvent.setup();
     renderEditor();
     await waitFor(() => screen.getByDisplayValue('Soupe'));
 
     const soupeInput = screen.getByDisplayValue('Soupe');
     const flexRow = soupeInput.parentElement;
     const [expandBtn] = flexRow.querySelectorAll('button');
-    await user.click(expandBtn);
+    fireEvent.click(expandBtn);
 
     const vegeTag = screen.getAllByText('vegetarien')[0];
-    await user.click(vegeTag);
+    fireEvent.click(vegeTag);
     expect(vegeTag.closest('button').className).toContain('bg-neutral-800');
   });
 
@@ -256,17 +238,13 @@ describe('MenuEditorPage', () => {
   });
 
   it('calls updateMenu on save button click', async () => {
-    const user = userEvent.setup();
     renderEditor();
     await waitFor(() => screen.getByDisplayValue('Le Bistrot'));
 
-    // Modify something to enable the save button
     const nameInput = screen.getByDisplayValue('Le Bistrot');
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Nouveau Nom');
+    fireEvent.change(nameInput, { target: { value: 'Nouveau Nom' } });
 
     const saveBtn = screen.getByText('Sauvegarder');
-    // Button may still be in "modified" state — click it
     fireEvent.click(saveBtn);
 
     await waitFor(() => expect(api.updateMenu).toHaveBeenCalled());

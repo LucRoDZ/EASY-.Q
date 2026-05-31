@@ -24,12 +24,13 @@ global.WebSocket = MockWebSocket;
 
 describe('KitchenScreen', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     vi.clearAllMocks();
+    vi.spyOn(window, 'setInterval').mockImplementation(() => 0);
+    vi.spyOn(window, 'clearInterval').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('renders without crashing', () => {
