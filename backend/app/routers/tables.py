@@ -101,7 +101,7 @@ def create_tables_bulk(
         number = str(body.start_at + i)
         table = Table(
             menu_slug=body.menu_slug,
-            restaurant_id=body.restaurant_id,
+            restaurant_id=user["sub"],
             number=number,
             label=body.zone,
             capacity=4,
