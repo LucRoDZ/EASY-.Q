@@ -177,7 +177,8 @@ def get_current_user(
     if not user_id:
         raise HTTPException(status_code=401, detail="Token missing sub claim")
 
-    email = payload.get("email", "")
+    raw_email = payload.get("email", "")
+    email = raw_email if "@" in raw_email and "{{" not in raw_email else ""
     org_id = payload.get("org_id") or payload.get("azp", "")
 
     # Look up subscription plan for the org
