@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
+import DashboardNav from '../../components/DashboardNav';
 import {
   Loader2, UtensilsCrossed, QrCode, Upload, Plus,
   ClipboardList, AlertCircle, Languages, Bell, Star, BarChart2,
@@ -404,6 +405,7 @@ export default function DashboardPage() {
             + Nouveau menu
           </Link>
         </div>
+        <DashboardNav slug={activeMenu?.slug} />
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">

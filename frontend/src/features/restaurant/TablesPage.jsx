@@ -6,6 +6,7 @@ import {
   LayoutGrid, List,
 } from 'lucide-react';
 import { api } from '../../api';
+import DashboardNav from '../../components/DashboardNav';
 
 // ─── QR Color Presets ─────────────────────────────────────────────────────────
 
@@ -604,6 +605,7 @@ export default function TablesPage() {
             </button>
           </div>
         </div>
+        <DashboardNav slug={menuSlug} />
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">

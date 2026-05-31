@@ -16,6 +16,7 @@ import {
   MessageSquare, Smile, Frown, Minus,
 } from 'lucide-react';
 import { api } from '../api';
+import DashboardNav from '../components/DashboardNav';
 
 // ---------------------------------------------------------------------------
 // Sentiment detection (keyword-based)
@@ -263,6 +264,7 @@ export default function DashboardConversationsPage() {
             </button>
           )}
         </div>
+        <DashboardNav slug={slug} />
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-5">

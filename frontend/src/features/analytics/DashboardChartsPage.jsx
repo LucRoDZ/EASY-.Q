@@ -27,6 +27,7 @@ import {
   UtensilsCrossed, AlertCircle, Download,
 } from 'lucide-react';
 import { api } from '../../api';
+import DashboardNav from '../../components/DashboardNav';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -389,6 +390,7 @@ export default function DashboardChartsPage() {
             </button>
           </div>
         </div>
+        <DashboardNav slug={slug} />
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
