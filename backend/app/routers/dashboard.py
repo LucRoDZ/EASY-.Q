@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
@@ -13,6 +14,7 @@ from app.services.menu_service import get_menu_by_slug
 from app.core import redis as redis_core
 from app.routers.auth import require_authenticated_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
@@ -31,7 +33,8 @@ def _parse_menu_counts(menu_data_json: str | None) -> tuple[int, int]:
         sections = data.get("sections", [])
         item_count = sum(len(s.get("items", [])) for s in sections)
         return len(sections), item_count
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to parse menu_data sections for menu: %s", exc)
         return 0, 0
 
 
@@ -145,7 +148,8 @@ async def get_waiter_calls(
     _assert_owns_menu(menu, user)
     try:
         calls = await redis_core.get_waiter_calls(slug)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Redis get_waiter_calls failed for %s: %s", slug, exc)
         calls = []
     return {"calls": calls}
 
@@ -170,7 +174,8 @@ async def update_waiter_call_status(
 
     try:
         updated = await redis_core.update_waiter_call_status(slug, call_id, new_status)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Redis update_waiter_call_status failed for %s/%s: %s", slug, call_id, exc)
         updated = None
 
     if updated is None:
@@ -179,8 +184,8 @@ async def update_waiter_call_status(
     if new_status == "resolved":
         try:
             await redis_core.dismiss_waiter_call(slug, call_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Redis dismiss_waiter_call failed for %s/%s: %s", slug, call_id, exc)
 
     return updated
 
@@ -197,8 +202,8 @@ async def dismiss_waiter_call(
     _assert_owns_menu(menu, user)
     try:
         await redis_core.dismiss_waiter_call(slug, call_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Redis dismiss_waiter_call failed for %s/%s: %s", slug, call_id, exc)
     return {"status": "dismissed"}
 
 
@@ -215,7 +220,8 @@ async def get_waiter_call_history(
     _assert_owns_menu(menu, user)
     try:
         calls = await redis_core.get_call_history(slug, table_number=table_number)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Redis get_call_history failed for %s: %s", slug, exc)
         calls = []
     return {"calls": calls}
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Order, Table
+from app.routers.auth import require_authenticated_user
 from app.schemas import OrderCreate, OrderResponse
 
 logger = logging.getLogger(__name__)
@@ -206,7 +207,12 @@ def edit_order(order_id: int, body: OrderEditBody, db: Session = Depends(get_db)
 
 
 @router.patch("/{order_id}/status", response_model=OrderResponse)
-def update_order_status(order_id: int, status: str, db: Session = Depends(get_db)):
+def update_order_status(
+    order_id: int,
+    status: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user),
+):
     """Update order status (restaurant/KDS use). Only allowed for non-done orders."""
     valid_statuses = {"pending", "confirmed", "in_progress", "ready", "done", "cancelled"}
     if status not in valid_statuses:
@@ -226,7 +232,11 @@ def update_order_status(order_id: int, status: str, db: Session = Depends(get_db
 
 
 @router.get("/by-table/{table_token}", response_model=list[OrderResponse])
-def list_orders_by_table(table_token: str, db: Session = Depends(get_db)):
+def list_orders_by_table(
+    table_token: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user),
+):
     """List all orders for a table (used by restaurant dashboard)."""
     orders = (
         db.query(Order)

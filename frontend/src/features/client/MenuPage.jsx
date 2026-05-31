@@ -130,8 +130,7 @@ export default function MenuPage() {
   // Fetch Google Places rating (best-effort, shown only if place_id is configured)
   useEffect(() => {
     if (!slug) return;
-    fetch(`/api/v1/restaurants/${slug}/google-rating`)
-      .then((r) => r.ok ? r.json() : null)
+    api.getGoogleRating(slug)
       .then((data) => { if (data?.rating) setGoogleRating(data); })
       .catch(() => {});
   }, [slug]);

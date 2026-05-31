@@ -158,16 +158,19 @@ def update_restaurant_status(
 def list_subscriptions(
     plan: str | None = Query(None),
     status: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    """List all subscriptions."""
+    """List all subscriptions (paginated)."""
     query = db.query(Subscription)
     if plan:
         query = query.filter(Subscription.plan == plan)
     if status:
         query = query.filter(Subscription.status == status)
-    subs = query.order_by(Subscription.created_at.desc()).all()
+    total = query.count()
+    subs = query.order_by(Subscription.created_at.desc()).offset(offset).limit(limit).all()
 
     return {
         "subscriptions": [
@@ -186,7 +189,9 @@ def list_subscriptions(
             }
             for s in subs
         ],
-        "total": len(subs),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }
 
 

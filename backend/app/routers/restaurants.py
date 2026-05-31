@@ -126,8 +126,10 @@ def _to_response(p: RestaurantProfile) -> RestaurantProfileResponse:
 
 @router.get("/{slug}", response_model=RestaurantProfileResponse)
 def get_profile(slug: str, db: Session = Depends(get_db)) -> RestaurantProfileResponse:
-    """Return restaurant profile; auto-creates a blank one if it doesn't exist yet."""
-    profile = _get_or_create(db, slug)
+    """Return restaurant profile. Returns 404 if the restaurant does not exist."""
+    profile = db.query(RestaurantProfile).filter(RestaurantProfile.slug == slug).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
     return _to_public_response(profile)
 
 

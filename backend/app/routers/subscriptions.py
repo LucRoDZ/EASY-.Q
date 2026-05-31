@@ -21,6 +21,7 @@ from app.config import (
 )
 from app.db import get_db
 from app.models import AuditLog, Subscription
+from app.routers.auth import require_authenticated_user
 
 stripe.api_key = STRIPE_SECRET_KEY
 
@@ -80,8 +81,14 @@ class PortalRequest(BaseModel):
 
 
 @router.get("/{restaurant_id}")
-def get_subscription(restaurant_id: str, db: Session = Depends(get_db)):
+def get_subscription(
+    restaurant_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user),
+):
     """Return the current subscription for a restaurant."""
+    if current_user["sub"] != restaurant_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
     sub = _get_or_create_subscription(db, restaurant_id)
     return {
         "restaurant_id": sub.restaurant_id,
@@ -96,9 +103,13 @@ def get_subscription(restaurant_id: str, db: Session = Depends(get_db)):
 
 @router.post("/create-checkout")
 async def create_checkout_session(
-    body: CheckoutRequest, db: Session = Depends(get_db)
+    body: CheckoutRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user),
 ):
     """Create a Stripe Checkout Session for the Pro plan."""
+    if current_user["sub"] != body.restaurant_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Stripe not configured")
     if not STRIPE_PRO_PRICE_ID:
@@ -146,8 +157,14 @@ async def create_checkout_session(
 
 
 @router.post("/portal")
-async def create_portal_session(body: PortalRequest, db: Session = Depends(get_db)):
+async def create_portal_session(
+    body: PortalRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_authenticated_user),
+):
     """Create a Stripe Customer Portal session for billing management."""
+    if current_user["sub"] != body.restaurant_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Stripe not configured")
 

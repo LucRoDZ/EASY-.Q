@@ -17,6 +17,9 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.db import Base, get_db
 from app.models import AuditLog, Subscription
+from app.routers.auth import require_authenticated_user
+
+_FAKE_USER = {"sub": "user_test123", "email": "test@example.com"}
 
 
 # ---------------------------------------------------------------------------
@@ -51,8 +54,10 @@ def client(test_db, monkeypatch):
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "init_redis", AsyncMock())
     monkeypatch.setattr(redis_core, "close_redis", AsyncMock())
+    app.dependency_overrides[require_authenticated_user] = lambda: _FAKE_USER
     with TestClient(app) as c:
         yield c
+    app.dependency_overrides.pop(require_authenticated_user, None)
 
 
 def _seed_subscription(test_db, restaurant_id: str, plan: str = "free",
@@ -97,30 +102,30 @@ def _stripe_subscription_event(
 
 class TestGetSubscription:
     def test_auto_creates_free_subscription_for_new_restaurant(self, client):
-        resp = client.get("/api/v1/subscriptions/new-restaurant-xyz")
+        resp = client.get("/api/v1/subscriptions/user_test123")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["restaurant_id"] == "new-restaurant-xyz"
+        assert body["restaurant_id"] == "user_test123"
         assert body["plan"] == "free"
         assert body["status"] == "active"
 
     def test_returns_existing_pro_subscription(self, client, test_db):
-        _seed_subscription(test_db, "pro-restaurant", plan="pro", stripe_sub_id="sub_abc")
-        resp = client.get("/api/v1/subscriptions/pro-restaurant")
+        _seed_subscription(test_db, "user_test123", plan="pro", stripe_sub_id="sub_abc")
+        resp = client.get("/api/v1/subscriptions/user_test123")
         assert resp.status_code == 200
         body = resp.json()
         assert body["plan"] == "pro"
         assert body["stripe_subscription_id"] == "sub_abc"
 
     def test_response_has_expected_fields(self, client):
-        resp = client.get("/api/v1/subscriptions/fields-test")
+        resp = client.get("/api/v1/subscriptions/user_test123")
         assert resp.status_code == 200
         body = resp.json()
         for field in ("restaurant_id", "plan", "status", "stripe_subscription_id", "current_period_end"):
             assert field in body, f"Missing field: {field}"
 
     def test_free_subscription_has_null_stripe_id(self, client):
-        resp = client.get("/api/v1/subscriptions/free-org-123")
+        resp = client.get("/api/v1/subscriptions/user_test123")
         body = resp.json()
         assert body["stripe_subscription_id"] is None
         assert body["current_period_end"] is None
@@ -135,17 +140,17 @@ class TestCreateCheckout:
         monkeypatch.setattr("app.routers.subscriptions.STRIPE_SECRET_KEY", "")
         resp = client.post(
             "/api/v1/subscriptions/create-checkout",
-            json={"restaurant_id": "rest-abc"},
+            json={"restaurant_id": "user_test123"},
         )
         assert resp.status_code == 503
 
     def test_returns_already_pro_when_active_pro(self, client, test_db, monkeypatch):
         monkeypatch.setattr("app.routers.subscriptions.STRIPE_SECRET_KEY", "sk_test_fake")
         monkeypatch.setattr("app.routers.subscriptions.STRIPE_PRO_PRICE_ID", "price_test")
-        _seed_subscription(test_db, "already-pro", plan="pro", status="active")
+        _seed_subscription(test_db, "user_test123", plan="pro", status="active")
         resp = client.post(
             "/api/v1/subscriptions/create-checkout",
-            json={"restaurant_id": "already-pro"},
+            json={"restaurant_id": "user_test123"},
         )
         assert resp.status_code == 200
         assert resp.json()["already_pro"] is True
@@ -161,7 +166,7 @@ class TestCreateCheckout:
         with patch("stripe.checkout.Session.create", return_value=mock_session):
             resp = client.post(
                 "/api/v1/subscriptions/create-checkout",
-                json={"restaurant_id": "new-org", "customer_email": "owner@example.com"},
+                json={"restaurant_id": "user_test123", "customer_email": "owner@example.com"},
             )
 
         assert resp.status_code == 200
@@ -179,7 +184,7 @@ class TestCreatePortal:
         monkeypatch.setattr("app.routers.subscriptions.STRIPE_SECRET_KEY", "")
         resp = client.post(
             "/api/v1/subscriptions/portal",
-            json={"restaurant_id": "rest-abc"},
+            json={"restaurant_id": "user_test123"},
         )
         assert resp.status_code == 503
 
@@ -188,13 +193,13 @@ class TestCreatePortal:
         # No subscription seeded → no stripe_subscription_id
         resp = client.post(
             "/api/v1/subscriptions/portal",
-            json={"restaurant_id": "no-sub-org"},
+            json={"restaurant_id": "user_test123"},
         )
         assert resp.status_code == 400
 
     def test_creates_portal_session(self, client, test_db, monkeypatch):
         monkeypatch.setattr("app.routers.subscriptions.STRIPE_SECRET_KEY", "sk_test_fake")
-        _seed_subscription(test_db, "portal-org", plan="pro", stripe_sub_id="sub_portal_123")
+        _seed_subscription(test_db, "user_test123", plan="pro", stripe_sub_id="sub_portal_123")
 
         mock_stripe_sub = {"customer": "cus_test_456"}
         mock_portal = MagicMock()
@@ -204,7 +209,7 @@ class TestCreatePortal:
              patch("stripe.billing_portal.Session.create", return_value=mock_portal):
             resp = client.post(
                 "/api/v1/subscriptions/portal",
-                json={"restaurant_id": "portal-org"},
+                json={"restaurant_id": "user_test123"},
             )
 
         assert resp.status_code == 200

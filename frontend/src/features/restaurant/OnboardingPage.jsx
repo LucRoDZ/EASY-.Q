@@ -182,8 +182,8 @@ function StepMenu({ onNext, onBack, restaurantName, getToken }) {
     setError('');
     try {
       const token = await getToken();
-      await api.uploadMenuAsync(restaurantName, file, token);
-      onNext({ menuUploaded: true });
+      const result = await api.uploadMenuAsync(restaurantName, file, token);
+      onNext({ menuUploaded: true, menuSlug: result.slug });
     } catch (err) {
       setError(err.message || 'Échec de l\'import.');
     } finally {
@@ -246,18 +246,19 @@ function StepMenu({ onNext, onBack, restaurantName, getToken }) {
 // Step 3: Create tables
 // ---------------------------------------------------------------------------
 
-function StepTables({ onNext, onBack }) {
+function StepTables({ onNext, onBack, menuSlug, getToken }) {
   const [count, setCount] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleCreate = async () => {
+    if (!menuSlug) { onNext({ tablesCreated: 0 }); return; }
     if (count < 1 || count > 100) { setError('Entre 1 et 100 tables.'); return; }
     setLoading(true);
     setError('');
     try {
-      const tables = Array.from({ length: count }, (_, i) => ({ number: i + 1 }));
-      await api.createTablesBulk({ tables });
+      const token = await getToken();
+      await api.createTablesBulk({ menu_slug: menuSlug, count, prefix: 'Table', start_at: 1 }, token);
       onNext({ tablesCreated: count });
     } catch (err) {
       setError(err.message || 'Impossible de créer les tables.');
@@ -391,28 +392,20 @@ export default function OnboardingPage() {
 
     // On reaching the celebration step, upsert RestaurantProfile + audit log
     if (nextStep === 4) {
-      getToken().then((token) => {
-        const API_BASE = import.meta.env.VITE_API_URL || '';
-        fetch(`${API_BASE}/api/v1/restaurants/onboarding/complete`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            restaurant_name: newData.restaurantName || 'Restaurant',
-            tables_created: newData.tablesCreated || 0,
-            menu_uploaded: newData.menuUploaded || false,
-            demo: newData.demo || false,
-          }),
-        });
-      }).catch(() => {}); // Non-critical
+      getToken()
+        .then((token) => api.completeOnboarding({
+          restaurant_name: newData.restaurantName || 'Restaurant',
+          tables_created: newData.tablesCreated || 0,
+          menu_uploaded: newData.menuUploaded || false,
+          demo: newData.demo || false,
+        }, token))
+        .catch(() => {}); // Non-critical
     }
   };
   const back = () => setStep((s) => Math.max(1, s - 1));
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       <header className="bg-black text-white">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center">
           <span className="font-semibold">EASY.Q</span>
@@ -426,7 +419,7 @@ export default function OnboardingPage() {
         <div className="bg-white border border-neutral-200 rounded-xl p-7">
           {step === 1 && <StepRestaurant onNext={next} />}
           {step === 2 && <StepMenu onNext={next} onBack={back} restaurantName={data.restaurantName || ''} getToken={getToken} />}
-          {step === 3 && <StepTables onNext={next} onBack={back} />}
+          {step === 3 && <StepTables onNext={next} onBack={back} menuSlug={data.menuSlug} getToken={getToken} />}
           {step === 4 && <StepDone data={data} />}
         </div>
       </main>

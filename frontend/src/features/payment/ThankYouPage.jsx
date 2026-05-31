@@ -100,14 +100,14 @@ function NPSSurvey({ slug, lang, paymentIntentId, googlePlaceId }) {
       <p className="font-medium text-neutral-900 text-sm">{t.question}</p>
 
       {/* Score grid 1-10 */}
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
           <button
             key={n}
             onClick={() => setScore(n)}
             aria-label={`${n} / 10`}
             aria-pressed={score === n}
-            className={`h-10 rounded-lg text-sm font-semibold border transition-colors ${
+            className={`h-11 sm:h-10 rounded-lg text-sm font-semibold border transition-colors ${
               score === n
                 ? 'bg-black text-white border-black'
                 : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
@@ -177,8 +177,7 @@ export default function ThankYouPage() {
   // Fetch restaurant profile for Google Review CTA
   useEffect(() => {
     if (!slug || !isSuccess) return;
-    fetch(`/api/v1/restaurants/${slug}`)
-      .then((r) => r.ok ? r.json() : null)
+    api.getRestaurantProfile(slug)
       .then((profile) => {
         if (profile?.google_place_id) setGooglePlaceId(profile.google_place_id);
       })
@@ -188,8 +187,7 @@ export default function ThankYouPage() {
   // Fetch order to show pickup number + countdown for Scan & Go / chatbot orders
   useEffect(() => {
     if (!orderId || !isSuccess) return;
-    fetch(`/api/v1/orders/${orderId}`)
-      .then((r) => r.ok ? r.json() : null)
+    api.getOrder(orderId)
       .then((order) => {
         if (order?.pickup_number) setPickupNumber(order.pickup_number);
         if (order?.seconds_remaining > 0) setSecondsRemaining(order.seconds_remaining);

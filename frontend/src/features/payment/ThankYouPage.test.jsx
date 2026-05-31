@@ -17,6 +17,8 @@ const mockSubmitFeedback = vi.fn();
 vi.mock('../../api', () => ({
   api: {
     submitFeedback: (...args) => mockSubmitFeedback(...args),
+    getRestaurantProfile: vi.fn().mockResolvedValue({}),
+    getOrder: vi.fn().mockResolvedValue(null),
   },
 }));
 
@@ -152,22 +154,14 @@ describe('ThankYouPage — NPS survey submission', () => {
   });
 
   it('shows Google review link for high score when googlePlaceId is available', async () => {
-    mockFetch.mockImplementationOnce((url) => {
-      if (url.includes('/api/v1/restaurants/')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ google_place_id: 'ChIJtest123' }),
-        });
-      }
-      return Promise.resolve({ ok: false, json: () => Promise.resolve(null) });
-    });
+    const { api: mockedApi } = await import('../../api');
+    mockedApi.getRestaurantProfile.mockResolvedValueOnce({ google_place_id: 'ChIJtest123' });
     mockSubmitFeedback.mockResolvedValueOnce({});
 
     renderThankYou('?redirect_status=succeeded&lang=fr');
 
     await waitFor(() => {
-      // fetch for google_place_id has been called
-      expect(mockFetch).toHaveBeenCalled();
+      expect(mockedApi.getRestaurantProfile).toHaveBeenCalled();
     });
 
     const scoreBtn = screen.getAllByRole('button').find((b) => b.textContent === '9');

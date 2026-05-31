@@ -10,6 +10,7 @@ Routes (prefix /api/v1/analytics):
 
 import csv
 import io
+import logging
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
@@ -24,6 +25,7 @@ from app.services.menu_service import get_menu_by_slug
 from app.routers.subscriptions import require_pro
 from app.routers.auth import require_authenticated_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
 # ---------------------------------------------------------------------------
@@ -326,8 +328,8 @@ def get_chatbot_analytics(
             import json
             msgs = json.loads(conv.messages or "[]") if isinstance(conv.messages, str) else (conv.messages or [])
             total_messages += len(msgs)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to parse conversation messages id=%s: %s", conv.id, exc)
 
     avg_messages = round(total_messages / total_sessions, 1) if total_sessions else 0
 

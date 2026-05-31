@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -34,13 +35,15 @@ from app.services.email_service import send_low_nps_email
 from app.core import redis as redis_core
 
 limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 
 
 async def _redis_get_session(session_id: str) -> list:
     """Load chat messages from Redis (2h TTL). Returns [] on miss or error."""
     try:
         return await redis_core.get_session(session_id) or []
-    except Exception:
+    except Exception as exc:
+        logger.warning("Redis get_session failed for %s: %s", session_id, exc)
         return []
 
 
@@ -48,8 +51,8 @@ async def _redis_save_session(session_id: str, messages: list) -> None:
     """Persist chat messages to Redis (2h TTL). Best-effort — never raises."""
     try:
         await redis_core.set_session(session_id, messages[-20:])
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Redis set_session failed for %s: %s", session_id, exc)
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -61,8 +64,8 @@ async def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get
         cached = await redis_core.get_menu_cache(slug, lang)
         if cached:
             return PublicMenuResponse(**cached)
-    except Exception:
-        pass  # Degrade gracefully if Redis is down
+    except Exception as exc:
+        logger.warning("Redis get_menu_cache failed for %s/%s: %s", slug, lang, exc)
 
     menu = get_menu_by_slug(db, slug)
     if not menu:
@@ -73,8 +76,8 @@ async def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get
     # Store in cache for future requests
     try:
         await redis_core.set_menu_cache(slug, data, lang)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Redis set_menu_cache failed for %s/%s: %s", slug, lang, exc)
 
     return PublicMenuResponse(**data)
 
@@ -170,8 +173,8 @@ async def chat_with_menu(request: Request, slug: str, body: ChatRequest, db: Ses
                     "status": "pending",
                 },
             )
-        except Exception:
-            pass  # Best-effort — KDS may not be connected
+        except Exception as exc:
+            logger.warning("Redis KDS publish failed for order %s on %s: %s", order_id, menu.slug, exc)
 
     if body.session_id:
         assistant_message = {"role": "assistant", "content": answer}
@@ -267,8 +270,9 @@ def submit_feedback(slug: str, body: FeedbackRequest, db: Session = Depends(get_
     try:
         db.add(log)
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.warning("Failed to save NPS feedback for %s: %s", slug, exc)
 
     # Send low-NPS alert to restaurant owner (detractors: score < 7)
     if body.nps_score < 7:
@@ -281,8 +285,8 @@ def submit_feedback(slug: str, body: FeedbackRequest, db: Session = Depends(get_
                     comment=body.comment or "",
                     slug=slug,
                 )
-        except Exception:
-            pass  # Best-effort — never block the client
+        except Exception as exc:
+            logger.warning("Failed to send low-NPS email for %s: %s", slug, exc)
 
     return {"status": "ok"}
 
@@ -314,7 +318,7 @@ async def call_waiter(slug: str, body: WaiterCallRequest, db: Session = Depends(
 
     try:
         await redis_core.push_waiter_call(slug, call)
-    except Exception:
-        pass  # Best-effort: Redis may not be running in dev
+    except Exception as exc:
+        logger.warning("Redis push_waiter_call failed for %s: %s", slug, exc)
 
     return {"status": "ok", "call_id": call_id}

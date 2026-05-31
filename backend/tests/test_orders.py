@@ -23,6 +23,9 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.db import Base, get_db
 from app.models import Order, Table
+from app.routers.auth import require_authenticated_user
+
+_FAKE_USER = {"sub": "user_test123", "email": "test@example.com"}
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +57,10 @@ def test_db():
 
 @pytest.fixture
 def client(test_db):
-    return TestClient(app)
+    app.dependency_overrides[require_authenticated_user] = lambda: _FAKE_USER
+    c = TestClient(app)
+    yield c
+    app.dependency_overrides.pop(require_authenticated_user, None)
 
 
 @pytest.fixture

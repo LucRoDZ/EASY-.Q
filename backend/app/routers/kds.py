@@ -52,7 +52,8 @@ class KDSConnectionManager:
         for ws in conns:
             try:
                 await ws.send_json(message)
-            except Exception:
+            except Exception as exc:
+                logger.debug("KDS WebSocket send failed (dead connection) for %s: %s", slug, exc)
                 dead.append(ws)
         for ws in dead:
             self.disconnect(slug, ws)

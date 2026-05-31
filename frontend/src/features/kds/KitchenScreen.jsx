@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Loader2, Wifi, WifiOff, ChefHat } from 'lucide-react';
+import { api } from '../../../api';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -234,14 +235,7 @@ export default function KitchenScreen() {
     } else {
       // Fallback to REST
       try {
-        await fetch(
-          `${API_BASE}/api/v1/kds/${slug}/orders/${orderId}/status?token=${encodeURIComponent(token)}`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: col.nextStatus }),
-          }
-        );
+        await api.updateKdsOrderStatus(slug, orderId, col.nextStatus, token);
       } catch {
         // Revert optimistic update
         setOrders((prev) =>
@@ -255,7 +249,7 @@ export default function KitchenScreen() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-neutral-900 flex items-center justify-center">
+      <div className="min-h-dvh bg-neutral-900 flex items-center justify-center">
         <div className="text-neutral-400 text-center">
           <ChefHat size={48} className="mx-auto mb-4 opacity-30" />
           <p className="text-lg">Token KDS manquant.</p>
@@ -268,7 +262,7 @@ export default function KitchenScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-900 text-white flex flex-col">
+    <div className="min-h-dvh bg-neutral-900 text-white flex flex-col">
       {/* Header */}
       <header className="bg-neutral-950 px-4 h-12 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
@@ -301,7 +295,7 @@ export default function KitchenScreen() {
       )}
 
       {/* Kanban columns */}
-      <div className="flex-1 grid grid-cols-4 gap-4 p-4 overflow-auto">
+      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 overflow-auto">
         {COLUMNS.map((col) => {
           const colOrders = orders.filter((o) => o.status === col.key);
           return (

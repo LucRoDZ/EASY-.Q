@@ -3,7 +3,7 @@ import hashlib
 import json
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core import redis as redis_core
@@ -26,6 +26,7 @@ from app.schemas import (
 from app.services.file_service import save_pdf, save_upload_file, is_valid_pdf, detect_mime_type
 from app.services.menu_service import _slugify, create_menu
 from app.services.ocr_service import extract_menu_from_pdf, extract_menu_from_images, translate_menu, validate_ocr_result
+from app.routers.public import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,8 @@ def _check_menu_plan_limit(restaurant_id: str, db: Session) -> None:
     if plan == "pro":
         return  # Pro = unlimited menus
 
-    # Free plan: check if a menu already exists for this restaurant_id slug
-    existing = db.query(Menu).filter(Menu.slug == restaurant_id).first()
+    # Free plan: check if a menu already exists for this restaurant
+    existing = db.query(Menu).filter(Menu.restaurant_id == restaurant_id).first()
     if existing:
         raise HTTPException(
             status_code=402,
@@ -107,7 +108,8 @@ async def _run_ocr_background(
                         "sections": translated.get("sections", base_menu["sections"]),
                         "wines": translated.get("wines", base_menu["wines"]),
                     }
-                except Exception:
+                except Exception as exc:
+                    logger.warning("Translation failed for lang=%s on menu %s: %s", lang, menu_id, exc)
                     translations[lang] = base_menu
             menu_data["translations"] = translations
 
@@ -175,7 +177,9 @@ async def upload_menu(
 # ---------------------------------------------------------------------------
 
 @router_v1.post("/upload", response_model=UploadMenuResponse, status_code=202)
+@limiter.limit("5/minute")
 async def upload_menu_v1(
+    request: Request,
     background_tasks: BackgroundTasks,
     restaurant_name: str = Form(...),
     file: UploadFile = File(...),

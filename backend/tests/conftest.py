@@ -84,6 +84,23 @@ def client(test_db, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Rate limiter reset — prevents cross-test rate limit bleed
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Reset slowapi in-memory rate limit counters before each test."""
+    try:
+        from app.main import app as _app
+        storage = getattr(_app.state, "limiter", None)
+        if storage:
+            _app.state.limiter._storage.reset()
+    except Exception:
+        pass
+    yield
+
+
+# ---------------------------------------------------------------------------
 # Redis helper mocks — for tests that exercise cache paths
 # ---------------------------------------------------------------------------
 

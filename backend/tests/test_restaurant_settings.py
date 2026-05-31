@@ -104,13 +104,10 @@ def _minimal_png() -> bytes:
 # GET /{slug} — profile retrieval and auto-creation
 # ---------------------------------------------------------------------------
 
-def test_get_profile_auto_creates_if_missing(client):
-    """GET /restaurants/{slug} creates a blank profile if it doesn't exist."""
-    resp = client.get("/api/v1/restaurants/new-restaurant")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["slug"] == "new-restaurant"
-    assert body["name"] == "new-restaurant"  # seeded from slug
+def test_get_profile_returns_404_if_missing(client):
+    """GET /restaurants/{slug} returns 404 when the restaurant does not exist."""
+    resp = client.get("/api/v1/restaurants/nonexistent-restaurant-xyz")
+    assert resp.status_code == 404
 
 
 def test_get_profile_returns_existing_data(client, test_db):

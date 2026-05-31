@@ -183,10 +183,13 @@ export const api = {
   },
 
   // Tables
-  async createTablesBulk(body) {
+  async createTablesBulk(body, token) {
     const res = await fetch(`${API_BASE}/api/v1/tables/bulk`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(body),
     });
     if (!res.ok) {
@@ -380,6 +383,44 @@ export const api = {
     a.download = `analytics-${slug}-${from}-${to}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  },
+
+  async getOrder(orderId) {
+    const res = await fetch(`${API_BASE}/api/v1/orders/${orderId}`);
+    if (!res.ok) return null;
+    return res.json();
+  },
+
+  async getGoogleRating(slug) {
+    const res = await fetch(`${API_BASE}/api/v1/restaurants/${slug}/google-rating`);
+    if (!res.ok) return null;
+    return res.json();
+  },
+
+  async updateKdsOrderStatus(slug, orderId, status, token) {
+    const res = await fetch(
+      `${API_BASE}/api/v1/kds/${slug}/orders/${orderId}/status?token=${encodeURIComponent(token)}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      }
+    );
+    if (!res.ok) throw new Error(`KDS status update failed (${res.status})`);
+    return res.json();
+  },
+
+  async completeOnboarding(body, token) {
+    const res = await fetch(`${API_BASE}/api/v1/restaurants/onboarding/complete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Onboarding failed (${res.status})`);
+    return res.json();
   },
 
   // Restaurant profile
