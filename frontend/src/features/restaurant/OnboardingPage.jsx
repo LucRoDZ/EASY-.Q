@@ -173,6 +173,7 @@ function StepRestaurant({ onNext }) {
 function StepMenu({ onNext, onBack, restaurantName, getToken }) {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState(''); // 'uploading' | 'processing' | 'ready' | 'error'
   const [error, setError] = useState('');
   const fileRef = useRef();
 
@@ -180,12 +181,40 @@ function StepMenu({ onNext, onBack, restaurantName, getToken }) {
     if (!file) { setError('Sélectionnez un fichier.'); return; }
     setLoading(true);
     setError('');
+    setOcrStatus('uploading');
     try {
       const token = await getToken();
       const result = await api.uploadMenuAsync(restaurantName, file, token);
+      const menuId = result.menu_id || result.id;
+
+      if (result.status === 'ready') {
+        onNext({ menuUploaded: true, menuSlug: result.slug });
+        return;
+      }
+
+      // Poll until OCR completes (max 3 minutes)
+      setOcrStatus('processing');
+      const MAX_ATTEMPTS = 90;
+      for (let i = 0; i < MAX_ATTEMPTS; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const pollToken = await getToken();
+        const status = await api.getMenuStatus(menuId, pollToken);
+        if (status.status === 'ready') {
+          onNext({ menuUploaded: true, menuSlug: result.slug });
+          return;
+        }
+        if (status.status === 'error') {
+          setError(status.ocr_error || 'Échec de l\'analyse du menu.');
+          setOcrStatus('error');
+          return;
+        }
+      }
+      setError('L\'analyse a pris trop de temps. Vous pouvez continuer et éditer le menu manuellement.');
+      setOcrStatus('error');
       onNext({ menuUploaded: true, menuSlug: result.slug });
     } catch (err) {
       setError(err.message || 'Échec de l\'import.');
+      setOcrStatus('');
     } finally {
       setLoading(false);
     }
@@ -225,7 +254,12 @@ function StepMenu({ onNext, onBack, restaurantName, getToken }) {
           disabled={!file || loading}
           className="w-full flex items-center justify-center gap-2 bg-black text-white py-3 rounded-full text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-50"
         >
-          {loading ? <Loader2 size={15} className="animate-spin" /> : <>Importer le menu <ArrowRight size={15} /></>}
+          {loading ? (
+            <span className="flex items-center gap-2">
+              <Loader2 size={15} className="animate-spin" />
+              {ocrStatus === 'uploading' ? 'Envoi en cours…' : 'Analyse en cours…'}
+            </span>
+          ) : <>Importer le menu <ArrowRight size={15} /></>}
         </button>
         <button
           onClick={handleDemo}
