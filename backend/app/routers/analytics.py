@@ -22,7 +22,6 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Conversation, Payment
 from app.services.menu_service import get_menu_by_slug
-from app.routers.subscriptions import require_pro
 from app.routers.auth import require_authenticated_user
 
 logger = logging.getLogger(__name__)
@@ -88,7 +87,7 @@ def get_analytics_summary(
 ):
     """Combined analytics summary for the restaurant dashboard. Requires Pro plan."""
     restaurant_id = user["sub"]
-    require_pro(restaurant_id, db)
+
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -197,7 +196,7 @@ def get_revenue_analytics(
 ):
     """Daily revenue breakdown. Requires Pro plan."""
     restaurant_id = user["sub"]
-    require_pro(restaurant_id, db)
+
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -247,7 +246,7 @@ def get_covers_analytics(
 ):
     """Daily covers (unique table sessions). Requires Pro plan."""
     restaurant_id = user["sub"]
-    require_pro(restaurant_id, db)
+
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -302,7 +301,7 @@ def get_chatbot_analytics(
 ):
     """Chatbot session and message metrics. Requires Pro plan."""
     restaurant_id = user["sub"]
-    require_pro(restaurant_id, db)
+
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -363,7 +362,7 @@ def get_items_analytics(
 ):
     """Top items sold by quantity and revenue. Requires Pro plan."""
     restaurant_id = user["sub"]
-    require_pro(restaurant_id, db)
+
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
@@ -423,7 +422,7 @@ def export_analytics_csv(
         raise HTTPException(status_code=400, detail="Only format=csv is supported")
 
     restaurant_id = user["sub"]
-    require_pro(restaurant_id, db)
+
 
     menu = get_menu_by_slug(db, slug)
     if not menu:

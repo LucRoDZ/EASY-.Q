@@ -209,21 +209,11 @@ def get_table_qr(
     back_color: str = Query("white", description="QR background color (hex or named)"),
     logo: bool = Query(False, description="Overlay restaurant logo in center"),
     db: Session = Depends(get_db),
-    user: dict = Depends(require_authenticated_user),
 ) -> Response:
-    """Return the QR code as a PNG image (for use as <img src=...>).
-
-    Optional query params:
-    - fill_color: foreground color (default "black"), hex or named
-    - back_color: background color (default "white"), hex or named
-    - logo: if true, overlay the restaurant logo in the center
-    """
+    """Return the QR code as a PNG image (for use as <img src=...>). Public endpoint."""
     table = db.query(Table).filter(Table.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
-    menu = db.query(Menu).filter(Menu.slug == table.menu_slug).first()
-    if not menu or menu.restaurant_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="Access denied")
 
     fill = _validate_color(fill_color, "black")
     back = _validate_color(back_color, "white")

@@ -119,6 +119,7 @@ function QrCustomizer({ settings, onChange }) {
 // ─── AddTablesForm ────────────────────────────────────────────────────────────
 
 function AddTablesForm({ menuSlug, onAdded }) {
+  const { getToken } = useAuth();
   const [count, setCount] = useState(10);
   const [prefix, setPrefix] = useState('Table');
   const [startAt, setStartAt] = useState(1);
@@ -131,13 +132,14 @@ function AddTablesForm({ menuSlug, onAdded }) {
     setError('');
     setLoading(true);
     try {
+      const token = await getToken();
       const tables = await api.createTablesBulk({
         menu_slug: menuSlug,
         count: Number(count),
         prefix,
         start_at: Number(startAt),
         zone: zone || null,
-      });
+      }, token);
       onAdded(tables);
       setStartAt((prev) => Number(prev) + Number(count));
     } catch (err) {
