@@ -258,7 +258,7 @@ function ReviewsAnalyticsCard({ menu }) {
         <span className="ml-auto text-xs text-neutral-400">{data.total} avis</span>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-4">
         <div className="text-center">
           <p className="text-2xl font-semibold text-neutral-900">
             {data.average_nps ?? '—'}
@@ -388,7 +388,7 @@ export default function DashboardPage() {
   const totalTables = menus.reduce((s, m) => s + (m.table_count || 0), 0);
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">

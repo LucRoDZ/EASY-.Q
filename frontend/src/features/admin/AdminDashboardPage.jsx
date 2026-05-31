@@ -32,7 +32,7 @@ function TokenGate({ children }) {
   if (token) return children;
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center px-4">
+    <div className="min-h-dvh bg-neutral-50 flex items-center justify-center px-4">
       <div className="bg-white border border-neutral-200 rounded-xl p-8 w-full max-w-sm space-y-4">
         <div className="flex items-center gap-2 text-neutral-900">
           <Lock size={18} />
@@ -263,32 +263,34 @@ function SubscriptionsTab({ token }) {
         <EmptyState message="Aucun abonnement enregistré." />
       ) : (
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 border-b border-neutral-200">
-              <tr>
-                {['Restaurant', 'Plan', 'Statut', 'Fin période', 'Créé le'].map((h) => (
-                  <th key={h} className="text-left text-xs text-neutral-500 font-medium px-4 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {subs.map((s) => (
-                <tr key={s.id} className="hover:bg-neutral-50">
-                  <td className="px-4 py-3 font-mono text-xs text-neutral-600">{s.restaurant_id}</td>
-                  <td className="px-4 py-3"><PlanBadge plan={s.plan} /></td>
-                  <td className="px-4 py-3"><StatusBadge status={s.status} /></td>
-                  <td className="px-4 py-3 text-xs text-neutral-400">
-                    {s.current_period_end
-                      ? new Date(s.current_period_end).toLocaleDateString('fr-FR')
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-neutral-400">
-                    {s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : '—'}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="bg-neutral-50 border-b border-neutral-200">
+                <tr>
+                  {['Restaurant', 'Plan', 'Statut', 'Fin période', 'Créé le'].map((h) => (
+                    <th key={h} className="text-left text-xs text-neutral-500 font-medium px-4 py-3">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {subs.map((s) => (
+                  <tr key={s.id} className="hover:bg-neutral-50">
+                    <td className="px-4 py-3 font-mono text-xs text-neutral-600">{s.restaurant_id}</td>
+                    <td className="px-4 py-3"><PlanBadge plan={s.plan} /></td>
+                    <td className="px-4 py-3"><StatusBadge status={s.status} /></td>
+                    <td className="px-4 py-3 text-xs text-neutral-400">
+                      {s.current_period_end
+                        ? new Date(s.current_period_end).toLocaleDateString('fr-FR')
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-neutral-400">
+                      {s.created_at ? new Date(s.created_at).toLocaleDateString('fr-FR') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -354,14 +356,14 @@ function AuditLogsTab({ token }) {
           value={filters.resource_type}
           onChange={(e) => handleFilterChange('resource_type', e.target.value)}
           placeholder="Type de ressource…"
-          className="w-48 px-3 py-2 bg-white border border-neutral-200 rounded-xl text-sm placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+          className="w-full sm:w-48 px-3 py-2 bg-white border border-neutral-200 rounded-xl text-sm placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
         />
         <input
           type="text"
           value={filters.resource_id}
           onChange={(e) => handleFilterChange('resource_id', e.target.value)}
           placeholder="ID ressource…"
-          className="w-40 px-3 py-2 bg-white border border-neutral-200 rounded-xl text-sm placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+          className="w-full sm:w-40 px-3 py-2 bg-white border border-neutral-200 rounded-xl text-sm placeholder-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
         />
         <button
           onClick={load}
@@ -380,26 +382,28 @@ function AuditLogsTab({ token }) {
         <>
           <p className="text-xs text-neutral-400">{total} événement{total !== 1 ? 's' : ''}</p>
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 border-b border-neutral-200">
-                <tr>
-                  {['Date', 'Acteur', 'Action', 'Ressource', 'ID'].map((h) => (
-                    <th key={h} className="text-left text-xs text-neutral-500 font-medium px-4 py-3">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-neutral-50">
-                    <td className="px-4 py-2.5 text-xs text-neutral-400 whitespace-nowrap">{formatDate(log.created_at)}</td>
-                    <td className="px-4 py-2.5 text-xs text-neutral-600">{log.actor_type}{log.actor_id ? `/${log.actor_id.slice(0, 8)}` : ''}</td>
-                    <td className="px-4 py-2.5 text-xs font-mono text-neutral-800">{log.action}</td>
-                    <td className="px-4 py-2.5 text-xs text-neutral-400">{log.resource_type || '—'}</td>
-                    <td className="px-4 py-2.5 text-xs font-mono text-neutral-400">{log.resource_id || '—'}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead className="bg-neutral-50 border-b border-neutral-200">
+                  <tr>
+                    {['Date', 'Acteur', 'Action', 'Ressource', 'ID'].map((h) => (
+                      <th key={h} className="text-left text-xs text-neutral-500 font-medium px-4 py-3">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {logs.map((log) => (
+                    <tr key={log.id} className="hover:bg-neutral-50">
+                      <td className="px-4 py-2.5 text-xs text-neutral-400 whitespace-nowrap">{formatDate(log.created_at)}</td>
+                      <td className="px-4 py-2.5 text-xs text-neutral-600">{log.actor_type}{log.actor_id ? `/${log.actor_id.slice(0, 8)}` : ''}</td>
+                      <td className="px-4 py-2.5 text-xs font-mono text-neutral-800">{log.action}</td>
+                      <td className="px-4 py-2.5 text-xs text-neutral-400">{log.resource_type || '—'}</td>
+                      <td className="px-4 py-2.5 text-xs font-mono text-neutral-400">{log.resource_id || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Pagination */}
@@ -447,7 +451,7 @@ export default function AdminDashboardPage() {
 
   return (
     <TokenGate>
-      <div className="min-h-screen bg-neutral-50">
+      <div className="min-h-dvh bg-neutral-50">
         {/* Header */}
         <header className="bg-black text-white sticky top-0 z-40">
           <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">

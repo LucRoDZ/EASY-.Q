@@ -357,7 +357,7 @@ export default function DashboardChartsPage() {
   }, [slug, period, exporting]);
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">

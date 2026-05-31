@@ -139,7 +139,7 @@ function OpeningHoursGrid({ hours, onChange }) {
       {DAYS.map(({ key, label }) => {
         const day = hours[key] || DEFAULT_HOURS;
         return (
-          <div key={key} className="grid grid-cols-4 items-center gap-3 py-3">
+          <div key={key} className="grid grid-cols-2 sm:grid-cols-4 items-center gap-2 sm:gap-3 py-3">
             <span className="text-sm font-medium text-neutral-900">{label}</span>
             <label className="flex items-center gap-2 text-sm text-neutral-500 col-span-1">
               <input
@@ -261,14 +261,14 @@ export default function RestaurantSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-neutral-50 flex items-center justify-center">
         <Loader2 size={24} className="animate-spin text-neutral-400" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">

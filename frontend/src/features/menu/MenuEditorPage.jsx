@@ -237,7 +237,7 @@ export default function MenuEditorPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-neutral-50 flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
       </div>
     );
@@ -245,7 +245,7 @@ export default function MenuEditorPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-neutral-50 flex items-center justify-center">
         <div className="flex items-center gap-2 text-red-500">
           <AlertCircle className="h-5 w-5" />
           {loadError}
@@ -257,7 +257,7 @@ export default function MenuEditorPage() {
   const sectionIds = sections.map((s) => s.id);
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">

@@ -179,7 +179,7 @@ export default function TranslatorPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-neutral-50 flex items-center justify-center">
         <div className="flex items-center gap-2 text-neutral-600">
           <AlertCircle size={18} /> {loadError}
         </div>
@@ -189,7 +189,7 @@ export default function TranslatorPage() {
 
   if (!menu) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-neutral-50 flex items-center justify-center">
         <Loader2 size={24} className="animate-spin text-neutral-400" />
       </div>
     );
@@ -198,7 +198,7 @@ export default function TranslatorPage() {
   const originalSections = menu.sections || [];
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
