@@ -116,24 +116,32 @@ def _extract_text_and_images(pdf_path: str) -> tuple[str, list[_ImageBlock], lis
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Scanned PDF fallback (pytesseract)
+# Scanned PDF fallback — render pages via PyMuPDF → Gemini Vision
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _extract_text_tesseract(pdf_path: str) -> str:
-    try:
-        import pytesseract
-        from pdf2image import convert_from_path
-    except ImportError as e:
-        raise RuntimeError(
-            "pytesseract / pdf2image not installed for scanned PDF fallback"
-        ) from e
+def _extract_text_gemini_vision(pdf_path: str) -> str:
+    """Render each PDF page as a PNG (via fitz) and send to Gemini Vision."""
+    doc = fitz.open(pdf_path)
+    parts: list[dict] = [{"text": "Extract all text from these menu pages, preserving structure:"}]
+    for page in doc:
+        mat = fitz.Matrix(2.0, 2.0)  # 2× zoom ≈ 144 dpi
+        pix = page.get_pixmap(matrix=mat)
+        parts.append({
+            "inline_data": {
+                "mime_type": "image/png",
+                "data": pix.tobytes("png"),
+            }
+        })
+    doc.close()
 
-    imgs = convert_from_path(pdf_path, dpi=200)
-    parts: list[str] = []
-    for i, img in enumerate(imgs):
-        text = pytesseract.image_to_string(img, lang="fra+eng")
-        parts.append(f"--- Page {i + 1} ---\n{text.strip()}")
-    return "\n\n".join(parts)
+    client = _client()
+    config = types.GenerateContentConfig(max_output_tokens=8192, temperature=0.0)
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=[{"role": "user", "parts": parts}],
+        config=config,
+    )
+    return response.text or ""
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -330,7 +338,7 @@ def extract_menu_from_pdf(pdf_path: str, restaurant_slug: str = "unknown") -> di
     raw_text, images, text_blocks = _extract_text_and_images(pdf_path)
 
     if len(raw_text.strip()) < 50:
-        raw_text = _extract_text_tesseract(pdf_path)
+        raw_text = _extract_text_gemini_vision(pdf_path)
         images = []
         text_blocks = []
 
@@ -348,19 +356,22 @@ def extract_menu_from_pdf(pdf_path: str, restaurant_slug: str = "unknown") -> di
 
 
 def extract_menu_from_images(image_paths: list[str]) -> dict:
-    try:
-        import pytesseract
-        from PIL import Image
-    except ImportError as e:
-        raise RuntimeError("pip install pytesseract Pillow") from e
-
-    parts: list[str] = []
+    """Send image files directly to Gemini Vision for extraction."""
+    import mimetypes
+    parts: list[dict] = [{"text": "Extract all menu items from these images, preserving structure:"}]
     for path in image_paths:
-        img = Image.open(path)
-        text = pytesseract.image_to_string(img, lang="fra+eng")
-        parts.append(text.strip())
+        mime = mimetypes.guess_type(path)[0] or "image/jpeg"
+        with open(path, "rb") as f:
+            parts.append({"inline_data": {"mime_type": mime, "data": f.read()}})
 
-    return _structure_with_llm("\n\n".join(parts))
+    client = _client()
+    config = types.GenerateContentConfig(max_output_tokens=8192, temperature=0.0)
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=[{"role": "user", "parts": parts}],
+        config=config,
+    )
+    return _structure_with_llm(response.text or "")
 
 
 def validate_ocr_result(raw: dict) -> dict:
