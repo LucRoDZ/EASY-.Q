@@ -19,18 +19,19 @@ function formatTime(isoStr) {
 
 // ─── WaiterCallsBanner ────────────────────────────────────────────────────────
 
-function WaiterCallsBanner({ menu }) {
+function WaiterCallsBanner({ menu, getToken }) {
   const [calls, setCalls] = useState([]);
 
   const loadCalls = useCallback(async () => {
     if (!menu?.slug) return;
     try {
-      const data = await api.getWaiterCalls(menu.slug);
+      const token = await getToken();
+      const data = await api.getWaiterCalls(menu.slug, token);
       setCalls(data.calls || []);
     } catch {
       /* silent — Redis may not be available */
     }
-  }, [menu?.slug]);
+  }, [menu?.slug, getToken]);
 
   useEffect(() => {
     loadCalls();
@@ -41,7 +42,8 @@ function WaiterCallsBanner({ menu }) {
   if (calls.length === 0) return null;
 
   const handleDismiss = async (callId) => {
-    await api.dismissWaiterCall(menu.slug, callId).catch(() => {});
+    const token = await getToken().catch(() => null);
+    await api.dismissWaiterCall(menu.slug, callId, token).catch(() => {});
     setCalls((prev) => prev.filter((c) => c.id !== callId));
   };
 
@@ -176,7 +178,7 @@ function ActiveMenuCard({ menu }) {
 
 // ─── QRCodesCard ──────────────────────────────────────────────────────────────
 
-function QRCodesCard({ menu }) {
+function QRCodesCard({ menu, getToken }) {
   const [downloading, setDownloading] = useState(false);
 
   if (!menu) return null;
@@ -184,7 +186,8 @@ function QRCodesCard({ menu }) {
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      await api.downloadTableQrPdf(menu.slug, menu.restaurant_name);
+      const token = await getToken().catch(() => null);
+      await api.downloadTableQrPdf(menu.slug, menu.restaurant_name, {}, token);
     } catch {
       /* silent */
     } finally {
@@ -228,17 +231,18 @@ function QRCodesCard({ menu }) {
 
 // ─── ReviewsAnalyticsCard ─────────────────────────────────────────────────────
 
-function ReviewsAnalyticsCard({ menu }) {
+function ReviewsAnalyticsCard({ menu, getToken }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!menu?.slug) return;
-    api.getReviewAnalytics(menu.slug)
+    getToken()
+      .then((token) => api.getReviewAnalytics(menu.slug, token))
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [menu?.slug]);
+  }, [menu?.slug, getToken]);
 
   if (!menu) return null;
   if (loading) return null;
@@ -431,7 +435,7 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* Waiter call notifications */}
-            {activeMenu && <WaiterCallsBanner menu={activeMenu} />}
+            {activeMenu && <WaiterCallsBanner menu={activeMenu} getToken={getToken} />}
 
             {/* Stat row (placeholders — remplis Phase 5) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -478,10 +482,10 @@ export default function DashboardPage() {
             )}
 
             {/* QR Codes */}
-            {activeMenu && <QRCodesCard menu={activeMenu} />}
+            {activeMenu && <QRCodesCard menu={activeMenu} getToken={getToken} />}
 
             {/* Review analytics */}
-            {activeMenu && <ReviewsAnalyticsCard menu={activeMenu} />}
+            {activeMenu && <ReviewsAnalyticsCard menu={activeMenu} getToken={getToken} />}
 
             {/* Quick actions */}
             <QuickActionsCard menu={activeMenu} />

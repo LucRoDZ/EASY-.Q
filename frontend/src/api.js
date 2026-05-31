@@ -215,7 +215,7 @@ export const api = {
     }
   },
 
-  async downloadTableQrPdf(menuSlug, restaurantName = 'Restaurant', qrSettings = {}) {
+  async downloadTableQrPdf(menuSlug, restaurantName = 'Restaurant', qrSettings = {}, token) {
     const { fillColor = 'black', backColor = 'white', showLogo = false } = qrSettings;
     const params = new URLSearchParams({
       menu_slug: menuSlug,
@@ -224,7 +224,9 @@ export const api = {
       back_color: backColor,
       logo: showLogo ? 'true' : 'false',
     });
-    const res = await fetch(`${API_BASE}/api/v1/tables/export/qr-pdf?${params}`);
+    const res = await fetch(`${API_BASE}/api/v1/tables/export/qr-pdf?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || 'Export failed');
@@ -333,8 +335,10 @@ export const api = {
     return res.json();
   },
 
-  async getReviewAnalytics(slug) {
-    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/analytics/reviews`);
+  async getReviewAnalytics(slug, token) {
+    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/analytics/reviews`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to load review analytics');
     return res.json();
   },
@@ -501,15 +505,18 @@ export const api = {
     return res.json();
   },
 
-  async getWaiterCalls(slug) {
-    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/waiter-calls`);
+  async getWaiterCalls(slug, token) {
+    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/waiter-calls`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) throw new Error('Failed to get waiter calls');
     return res.json();
   },
 
-  async dismissWaiterCall(slug, callId) {
+  async dismissWaiterCall(slug, callId, token) {
     await fetch(`${API_BASE}/api/dashboard/menus/${slug}/waiter-calls/${callId}`, {
       method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   },
 
