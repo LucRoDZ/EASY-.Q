@@ -62,6 +62,7 @@ function ItemDetailModal({ item, currency, lang, onClose, onAdd }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-0 sm:px-4"
+      style={{ animation: 'fade-in 0.2s ease-out' }}
       onClick={onClose}
     >
       <div
@@ -70,6 +71,7 @@ function ItemDetailModal({ item, currency, lang, onClose, onAdd }) {
         aria-modal="true"
         aria-labelledby="item-modal-title"
         className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-xl"
+        style={{ animation: 'slide-up 0.25s ease-out' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -86,7 +88,7 @@ function ItemDetailModal({ item, currency, lang, onClose, onAdd }) {
             type="button"
             onClick={onClose}
             aria-label="Fermer"
-            className="p-1.5 hover:bg-neutral-100 rounded-full transition-colors shrink-0"
+            className="p-2 hover:bg-neutral-100 rounded-full transition-colors shrink-0"
           >
             <X className="h-5 w-5 text-neutral-500" />
           </button>
@@ -131,8 +133,10 @@ function ItemDetailModal({ item, currency, lang, onClose, onAdd }) {
                       key={code}
                       className="flex items-center gap-1.5 text-xs text-neutral-700 bg-neutral-50 border border-neutral-200 px-2.5 py-1 rounded-full"
                     >
-                      <span className="w-4 h-4 rounded-full bg-neutral-800 text-white flex items-center justify-center shrink-0"
-                        style={{ fontSize: '7px', fontWeight: 700 }}>
+                      <span
+                        className="w-4 h-4 rounded-full bg-neutral-800 text-white flex items-center justify-center shrink-0 font-bold"
+                        style={{ fontSize: '10px' }}
+                      >
                         {info.abbr}
                       </span>
                       {info.label}
@@ -221,7 +225,7 @@ function MenuItem({ item, currency, lang, onAdd, onOpenDetail }) {
           )}
           <button
             onClick={handleAdd}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`flex items-center gap-1 px-3 py-2.5 rounded-full text-sm font-medium transition-all ${
               added
                 ? 'bg-green-500 text-white'
                 : 'bg-black text-white hover:bg-neutral-800'
@@ -272,7 +276,8 @@ function WineItem({ wine, currency, lang, onAdd }) {
           )}
           <button
             onClick={handleAdd}
-            className={`p-1.5 rounded-full transition-all ${
+            aria-label={added ? t(lang, 'added') : t(lang, 'addToCart')}
+            className={`p-3 rounded-full transition-all ${
               added ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-neutral-800'
             }`}
           >
@@ -293,24 +298,29 @@ const DIET_FILTERS = [
 ];
 
 export function SearchFilterBar({ query, onQueryChange, activeFilters, onToggleFilter, lang }) {
+  const searchId = 'menu-search-input';
   return (
     <div className="space-y-3 mb-6">
       {/* Search input */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+        <label htmlFor={searchId} className="sr-only">
+          {t(lang, 'search.label')}
+        </label>
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" aria-hidden="true" />
         <input
+          id={searchId}
           type="search"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder={lang === 'fr' ? 'Rechercher un plat…' : lang === 'es' ? 'Buscar un plato…' : 'Search dishes…'}
+          placeholder={t(lang, 'search.label') + '…'}
           className="w-full pl-9 pr-4 py-2.5 border border-neutral-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
         />
         {query && (
           <button
             type="button"
             onClick={() => onQueryChange('')}
-            aria-label={lang === 'fr' ? 'Effacer la recherche' : lang === 'es' ? 'Borrar búsqueda' : 'Clear search'}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
+            aria-label={t(lang, 'search.clear')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -347,7 +357,6 @@ export function SearchFilterBar({ query, onQueryChange, activeFilters, onToggleF
 // ─── filter helpers ───────────────────────────────────────────────────────────
 
 function itemMatchesFilters(item, query, activeFilters) {
-  // Text search
   if (query) {
     const q = query.toLowerCase();
     const inName = item.name?.toLowerCase().includes(q);
@@ -356,7 +365,6 @@ function itemMatchesFilters(item, query, activeFilters) {
     if (!inName && !inDesc && !inTags) return false;
   }
 
-  // Diet filters
   for (const filterId of activeFilters) {
     const def = DIET_FILTERS.find((f) => f.id === filterId);
     if (!def) continue;
@@ -381,6 +389,9 @@ function itemMatchesFilters(item, query, activeFilters) {
 
 // ─── MenuView ─────────────────────────────────────────────────────────────────
 
+// Sticky header (56px) + category nav (~44px) = ~100px; 7rem ≈ 112px gives comfortable buffer
+const SECTION_SCROLL_MARGIN = '7rem';
+
 export default function MenuView({ sections, wines, currency, lang, query = '', activeFilters = [] }) {
   const { addItem } = useCart();
   const [detailItem, setDetailItem] = useState(null);
@@ -388,7 +399,6 @@ export default function MenuView({ sections, wines, currency, lang, query = '', 
   const handleOpenDetail = useCallback((item) => setDetailItem(item), []);
   const handleCloseDetail = useCallback(() => setDetailItem(null), []);
 
-  // Filter sections — preserve originalIdx so CategoryNav section IDs remain stable under filtering
   const filteredSections = (sections || [])
     .map((section, originalIdx) => ({
       ...section,
@@ -404,7 +414,6 @@ export default function MenuView({ sections, wines, currency, lang, query = '', 
 
   return (
     <>
-      {/* Item detail modal */}
       {detailItem && (
         <ItemDetailModal
           item={detailItem}
@@ -433,6 +442,7 @@ export default function MenuView({ sections, wines, currency, lang, query = '', 
                 key={section.originalIdx}
                 id={`section-${section.originalIdx}`}
                 className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6"
+                style={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}
               >
                 <h3 className="text-lg font-bold text-neutral-900 mb-4 pb-2 border-b border-neutral-200 uppercase tracking-wide">
                   {section.title}
@@ -458,8 +468,8 @@ export default function MenuView({ sections, wines, currency, lang, query = '', 
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 sticky top-24">
               <h3 className="text-lg font-bold text-neutral-900 mb-4 pb-2 border-b border-neutral-200 flex items-center gap-2">
-                <Wine className="h-5 w-5" />
-                Wines
+                <Wine className="h-5 w-5" aria-hidden="true" />
+                {t(lang, 'menu.wines')}
               </h3>
               <div>
                 {wines.map((wine, i) => (

@@ -57,6 +57,13 @@ export const translations = {
 
     // Search
     "search.clear": "Clear search",
+    "search.label": "Search dishes",
+
+    // Menu
+    "menu.wines": "Wines",
+    "menu.retry": "Try again",
+    "menu.notFound": "Menu not found",
+    "menu.categories": "Menu categories",
   },
   
   fr: {
@@ -117,6 +124,13 @@ export const translations = {
 
     // Search
     "search.clear": "Effacer la recherche",
+    "search.label": "Rechercher un plat",
+
+    // Menu
+    "menu.wines": "Vins",
+    "menu.retry": "Réessayer",
+    "menu.notFound": "Menu introuvable",
+    "menu.categories": "Catégories du menu",
   },
   
   es: {
@@ -177,6 +191,13 @@ export const translations = {
 
     // Search
     "search.clear": "Borrar búsqueda",
+    "search.label": "Buscar un plato",
+
+    // Menu
+    "menu.wines": "Vinos",
+    "menu.retry": "Reintentar",
+    "menu.notFound": "Menú no encontrado",
+    "menu.categories": "Categorías del menú",
   }
 };
 
