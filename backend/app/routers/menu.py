@@ -494,7 +494,7 @@ async def update_menu(
         data["restaurant_name"] = body.restaurant_name
 
     if body.sections is not None:
-        data["sections"] = [s.model_dump() for s in body.sections]
+        data["sections"] = body.sections
 
     if body.wines is not None:
         data["wines"] = body.wines

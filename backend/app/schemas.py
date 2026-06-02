@@ -163,7 +163,7 @@ class MenuSectionUpdate(BaseModel):
 
 class MenuUpdateBody(BaseModel):
     restaurant_name: Optional[str] = None
-    sections: Optional[list[MenuSectionUpdate]] = None
+    sections: Optional[list[dict]] = None
     wines: Optional[list[dict]] = None
 
 
