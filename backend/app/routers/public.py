@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
@@ -57,13 +57,16 @@ async def _redis_save_session(session_id: str, messages: list) -> None:
 router = APIRouter(prefix="/api/public", tags=["public"])
 
 
-@router.get("/menus/{slug}", response_model=PublicMenuResponse)
+@router.get("/menus/{slug}")
 async def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get_db)):
     # Check Redis cache first (5-min TTL)
     try:
         cached = await redis_core.get_menu_cache(slug, lang)
         if cached:
-            return PublicMenuResponse(**cached)
+            return JSONResponse(
+                content=PublicMenuResponse(**cached).model_dump(),
+                headers={"Cache-Control": "no-cache"},
+            )
     except Exception as exc:
         logger.warning("Redis get_menu_cache failed for %s/%s: %s", slug, lang, exc)
 
@@ -79,7 +82,10 @@ async def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get
     except Exception as exc:
         logger.warning("Redis set_menu_cache failed for %s/%s: %s", slug, lang, exc)
 
-    return PublicMenuResponse(**data)
+    return JSONResponse(
+        content=PublicMenuResponse(**data).model_dump(),
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @router.get("/menus/{slug}/conversation")

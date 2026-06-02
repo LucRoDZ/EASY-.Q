@@ -14,7 +14,7 @@ export const api = {
   getSessionId,
   
   async getMenu(slug, lang = 'en') {
-    const res = await fetch(`${API_BASE}/api/public/menus/${slug}?lang=${lang}`);
+    const res = await fetch(`${API_BASE}/api/public/menus/${slug}?lang=${lang}`, { cache: 'no-store' });
     if (!res.ok) throw new Error('Menu not found');
     return res.json();
   },
