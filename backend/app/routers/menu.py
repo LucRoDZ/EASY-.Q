@@ -494,16 +494,25 @@ async def update_menu(
         data["restaurant_name"] = body.restaurant_name
 
     if body.sections is not None:
+        logger.info(
+            "update_menu id=%s slug=%s: saving %d sections (was %d). Clearing stale translations.",
+            menu_id, menu.slug, len(body.sections), len(data.get("sections", [])),
+        )
         data["sections"] = body.sections
+        # Translations are derived from sections — invalidate them so the public
+        # page serves the new content instead of the stale OCR-generated copies.
+        data.pop("translations", None)
 
     if body.wines is not None:
         data["wines"] = body.wines
 
     menu.menu_data = json.dumps(data, ensure_ascii=False)
     db.commit()
+    logger.info("update_menu id=%s slug=%s: committed to DB.", menu_id, menu.slug)
 
     # Invalidate menu cache for all language variants
-    await redis_core.invalidate_menu_cache(menu.slug)
+    deleted = await redis_core.invalidate_menu_cache(menu.slug)
+    logger.info("update_menu id=%s slug=%s: invalidated %s Redis keys.", menu_id, menu.slug, deleted)
 
     return MenuSaveResponse(menu_id=menu.id, slug=menu.slug)
 

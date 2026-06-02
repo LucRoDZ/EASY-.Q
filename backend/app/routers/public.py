@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -63,6 +64,7 @@ async def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get
     try:
         cached = await redis_core.get_menu_cache(slug, lang)
         if cached:
+            logger.info("get_public_menu slug=%s lang=%s: Redis HIT, %d sections.", slug, lang, len(cached.get("sections", [])))
             return JSONResponse(
                 content=PublicMenuResponse(**cached).model_dump(),
                 headers={"Cache-Control": "no-cache"},
@@ -74,7 +76,13 @@ async def get_public_menu(slug: str, lang: str = "en", db: Session = Depends(get
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
 
+    raw = json.loads(menu.menu_data) if menu.menu_data else {}
+    has_translation = lang in raw.get("translations", {})
     data = get_menu_data(menu, lang)
+    logger.info(
+        "get_public_menu slug=%s lang=%s: DB read, has_translation=%s, serving %d sections.",
+        slug, lang, has_translation, len(data.get("sections", [])),
+    )
 
     # Store in cache for future requests
     try:
