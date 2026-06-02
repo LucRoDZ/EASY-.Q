@@ -151,7 +151,15 @@ export default function MenuEditorPage() {
       setSaveStatus('saving');
       try {
         const token = await getToken();
-        await api.updateMenu(menuId, { restaurant_name: name, sections: secs, wines: ws }, token);
+        const cleanSections = secs.map(({ id: _sid, ...s }) => ({
+          ...s,
+          items: s.items.map(({ id: _iid, _matched_image, image_url, ...it }) => ({
+            ...it,
+            price: it.price === '' || it.price === undefined ? null : Number(it.price) || null,
+            name: it.name || '',
+          })),
+        }));
+        await api.updateMenu(menuId, { restaurant_name: name, sections: cleanSections, wines: ws }, token);
         setSaveStatus('saved');
       } catch {
         setSaveStatus('error');

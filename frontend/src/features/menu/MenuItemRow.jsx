@@ -73,7 +73,7 @@ function MenuItemRow({ item, onUpdate, onDelete, dragListeners }) {
           type="number"
           min="0"
           step="0.5"
-          onChange={(e) => set('price', e.target.value === '' ? '' : parseFloat(e.target.value))}
+          onChange={(e) => set('price', e.target.value === '' ? null : parseFloat(e.target.value))}
         />
         <button
           type="button"
