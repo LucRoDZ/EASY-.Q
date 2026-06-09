@@ -1,8 +1,10 @@
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
-import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag, CheckCircle, ChefHat } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { useUserRole } from '../../context/UserRoleContext';
 import { t } from '../../localization/translations';
+import { api } from '../../api';
 
 function formatPrice(price, currency) {
   if (price == null) return '';
@@ -16,6 +18,45 @@ function formatPrice(price, currency) {
   }
 }
 
+function WaiterOrderConfirmed({ items, total, currency, tableNumber, onNewOrder }) {
+  return (
+    <div className="min-h-dvh bg-neutral-50 flex flex-col items-center justify-center px-4">
+      <div className="bg-white rounded-2xl border border-neutral-200 p-8 max-w-sm w-full text-center shadow-sm">
+        <CheckCircle className="w-14 h-14 text-green-500 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-neutral-900 mb-1">Commande envoyée</h2>
+        {tableNumber && (
+          <p className="text-sm text-neutral-500 mb-5">Table {tableNumber}</p>
+        )}
+
+        <div className="text-left space-y-2 mb-5 border-t border-neutral-100 pt-4">
+          {items.map((item, i) => (
+            <div key={i} className="flex justify-between text-sm">
+              <span className="text-neutral-700">{item.quantity}× {item.name}</span>
+              <span className="text-neutral-500">{formatPrice(item.price * item.quantity, currency)}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-between font-semibold text-neutral-900 border-t border-neutral-100 pt-3 mb-6">
+          <span>Total</span>
+          <span>{formatPrice(total, currency)}</span>
+        </div>
+
+        <p className="text-xs text-neutral-400 mb-6">
+          Le client règle l'addition au comptoir.
+        </p>
+
+        <button
+          onClick={onNewOrder}
+          className="w-full bg-black text-white py-3 rounded-full font-semibold hover:bg-neutral-800 transition-colors"
+        >
+          Retour aux tables
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CartPage() {
   const { slug } = useParams();
   const [searchParams] = useSearchParams();
@@ -23,9 +64,45 @@ export default function CartPage() {
   const currency = searchParams.get('currency') || 'EUR';
   const navigate = useNavigate();
 
-  const { items, updateQuantity, removeItem, total, itemCount, setSlug } = useCart();
+  const { items, updateQuantity, removeItem, total, itemCount, setSlug, clearCart } = useCart();
+  const { role } = useUserRole();
+  const isWaiter = role === 'waiter';
+
+  const [sending, setSending] = useState(false);
+  const [confirmed, setConfirmed] = useState(null); // { items, total, tableNumber }
 
   useEffect(() => { setSlug(slug); }, [slug, setSlug]);
+
+  async function handleWaiterOrder() {
+    const tableToken = searchParams.get('table');
+    setSending(true);
+    try {
+      await api.createOrder({
+        menu_slug: slug,
+        table_token: tableToken || undefined,
+        currency: currency.toLowerCase(),
+        items: items.map(({ name, price, quantity }) => ({ name, price, quantity })),
+      });
+      setConfirmed({ items: [...items], total, tableNumber: searchParams.get('tableNumber') });
+      clearCart();
+    } catch (err) {
+      alert(`Erreur : ${err.message}`);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (confirmed) {
+    return (
+      <WaiterOrderConfirmed
+        items={confirmed.items}
+        total={confirmed.total}
+        currency={currency}
+        tableNumber={confirmed.tableNumber}
+        onNewOrder={() => navigate('/waiter')}
+      />
+    );
+  }
 
   return (
     <div className="min-h-dvh bg-neutral-50">
@@ -33,7 +110,7 @@ export default function CartPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link
-              to={`/menu/${slug}?lang=${lang}`}
+              to={`/menu/${slug}?lang=${lang}${searchParams.get('table') ? `&table=${searchParams.get('table')}` : ''}`}
               className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -102,53 +179,67 @@ export default function CartPage() {
             </div>
 
             <div className="mt-6 bg-white rounded-xl border border-neutral-200 p-5">
-              {/* Item count + VAT breakdown */}
               <div className="space-y-2 mb-4 pb-4 border-b border-neutral-100">
                 <div className="flex justify-between text-sm text-neutral-600">
                   <span>{itemCount} {itemCount === 1 ? t(lang, 'item') : t(lang, 'items')}</span>
                   <span>{formatPrice(total, currency)}</span>
                 </div>
-                <div className="flex justify-between text-xs text-neutral-400">
-                  <span>TVA 10% (plats)</span>
-                  <span>{formatPrice(total * 0.1 / 1.1, currency)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-neutral-400">
-                  <span>TVA 20% (boissons alcoolisées)</span>
-                  <span>—</span>
-                </div>
+                {!isWaiter && (
+                  <>
+                    <div className="flex justify-between text-xs text-neutral-400">
+                      <span>TVA 10% (plats)</span>
+                      <span>{formatPrice(total * 0.1 / 1.1, currency)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-neutral-400">
+                      <span>TVA 20% (boissons alcoolisées)</span>
+                      <span>—</span>
+                    </div>
+                  </>
+                )}
               </div>
+
               <div className="flex justify-between items-center mb-4">
                 <span className="font-semibold text-neutral-800">{t(lang, 'total')}</span>
                 <p className="text-2xl font-bold text-neutral-900">{formatPrice(total, currency)}</p>
               </div>
 
-              {/* Cart validation */}
-              {total < 5 && total > 0 && (
-                <p role="alert" className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-                  {lang === 'fr'
-                    ? `Montant minimum : 5,00 €. Il manque ${formatPrice(5 - total, currency)}.`
-                    : lang === 'es'
-                    ? `Importe mínimo: 5,00 €. Faltan ${formatPrice(5 - total, currency)}.`
-                    : `Minimum order: ${formatPrice(5, currency)}. Add ${formatPrice(5 - total, currency)} more.`}
-                </p>
+              {isWaiter ? (
+                <button
+                  disabled={items.length === 0 || sending}
+                  onClick={handleWaiterOrder}
+                  className="w-full bg-black text-white py-4 rounded-full font-semibold text-lg hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <ChefHat className="w-5 h-5" />
+                  {sending ? 'Envoi en cours…' : 'Envoyer en cuisine'}
+                </button>
+              ) : (
+                <>
+                  {total < 5 && total > 0 && (
+                    <p role="alert" className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                      {lang === 'fr'
+                        ? `Montant minimum : 5,00 €. Il manque ${formatPrice(5 - total, currency)}.`
+                        : lang === 'es'
+                        ? `Importe mínimo: 5,00 €. Faltan ${formatPrice(5 - total, currency)}.`
+                        : `Minimum order: ${formatPrice(5, currency)}. Add ${formatPrice(5 - total, currency)} more.`}
+                    </p>
+                  )}
+                  <button
+                    disabled={total < 5}
+                    onClick={() => {
+                      const tableParam = searchParams.get('table');
+                      const params = new URLSearchParams({ lang, currency });
+                      if (tableParam) params.set('table', tableParam);
+                      navigate(`/menu/${slug}/tip?${params}`);
+                    }}
+                    className="w-full bg-black text-white py-4 rounded-full font-semibold text-lg hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {t(lang, 'pay')} · {formatPrice(total, currency)}
+                  </button>
+                  <div className="mt-4 pt-4 border-t border-neutral-100">
+                    <p className="text-xs text-neutral-500 text-center">{t(lang, 'acceptedPayments')}</p>
+                  </div>
+                </>
               )}
-
-              <button
-                disabled={total < 5}
-                onClick={() => {
-                  const tableParam = searchParams.get('table');
-                  const params = new URLSearchParams({ lang, currency });
-                  if (tableParam) params.set('table', tableParam);
-                  navigate(`/menu/${slug}/tip?${params}`);
-                }}
-                className="w-full bg-black text-white py-4 rounded-full font-semibold text-lg hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {t(lang, 'pay')} · {formatPrice(total, currency)}
-              </button>
-
-              <div className="mt-4 pt-4 border-t border-neutral-100">
-                <p className="text-xs text-neutral-500 text-center">{t(lang, 'acceptedPayments')}</p>
-              </div>
             </div>
           </>
         )}

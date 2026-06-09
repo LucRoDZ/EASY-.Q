@@ -433,6 +433,19 @@ export const api = {
     URL.revokeObjectURL(url);
   },
 
+  async createOrder(body) {
+    const res = await fetch(`${API_BASE}/api/v1/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Order failed (${res.status})`);
+    }
+    return res.json();
+  },
+
   async getOrder(orderId) {
     const res = await fetch(`${API_BASE}/api/v1/orders/${orderId}`);
     if (!res.ok) return null;
