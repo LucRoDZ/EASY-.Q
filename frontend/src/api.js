@@ -254,6 +254,14 @@ export const api = {
     URL.revokeObjectURL(url);
   },
 
+  async getCurrentUser(token) {
+    const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch user');
+    return res.json();
+  },
+
   async getDashboardMenus(token) {
     const res = await fetch(`${API_BASE}/api/dashboard/menus`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},

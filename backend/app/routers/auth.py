@@ -154,6 +154,15 @@ def require_authenticated_user(authorization: str | None = Header(None)) -> dict
     return payload
 
 
+def require_owner(authorization: str | None = Header(None)) -> dict:
+    """FastAPI dependency — raises 403 unless the caller has role='owner' in Clerk publicMetadata."""
+    payload = require_authenticated_user(authorization)
+    role = (payload.get("public_metadata") or {}).get("role")
+    if role != "owner":
+        raise HTTPException(status_code=403, detail="Accès réservé aux restaurateurs")
+    return payload
+
+
 # ---------------------------------------------------------------------------
 # GET /me
 # ---------------------------------------------------------------------------
@@ -181,10 +190,17 @@ def get_current_user(
     email = raw_email if "@" in raw_email and "{{" not in raw_email else ""
     org_id = payload.get("org_id") or payload.get("azp", "")
 
+    # Role from Clerk publicMetadata — 'owner' | 'waiter' | None (None = owner, backwards compat)
+    public_metadata = payload.get("public_metadata") or {}
+    role = public_metadata.get("role")  # 'owner' | 'waiter'
+    waiter_restaurant_id = public_metadata.get("restaurant_id")
+    waiter_menu_slug = public_metadata.get("menu_slug")
+
     # Look up subscription plan for the org
     plan = "free"
-    if org_id:
-        sub = db.query(Subscription).filter(Subscription.restaurant_id == org_id).first()
+    effective_restaurant_id = waiter_restaurant_id or org_id
+    if effective_restaurant_id:
+        sub = db.query(Subscription).filter(Subscription.restaurant_id == effective_restaurant_id).first()
         if sub:
             plan = sub.plan
 
@@ -193,6 +209,9 @@ def get_current_user(
         "email": email,
         "org_id": org_id,
         "plan": plan,
+        "role": role,
+        "restaurant_id": effective_restaurant_id,
+        "menu_slug": waiter_menu_slug,
     }
 
 

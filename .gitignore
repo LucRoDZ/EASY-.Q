@@ -24,6 +24,7 @@ parts/
 sdist/
 var/
 wheels/
+.mcp
 
 # ── Environment / Secrets ─────────────────────────────────────────────────────
 .env
@@ -77,3 +78,5 @@ apr_data/
 # ── Docs ──────────────────────────────────────────────────────────────────────
 docs/
 
+# Added by code-review-graph
+.code-review-graph/

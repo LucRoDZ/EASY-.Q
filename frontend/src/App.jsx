@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { CartProvider } from './context/CartContext';
+import { UserRoleProvider } from './context/UserRoleContext';
 
 const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -10,6 +11,7 @@ import ClientMenuPage from './features/client/MenuPage';
 import CartPage from './features/client/CartPage';
 import HomePage from './pages/HomePage';
 import RequireAuth from './components/RequireAuth';
+import RequireOwner from './components/RequireOwner';
 
 // Lazy-load everything else (dashboard, admin, payment, KDS, etc.)
 const DashboardConversationsPage = lazy(() => import('./pages/DashboardConversationsPage'));
@@ -28,6 +30,8 @@ const AdminDashboardPage = lazy(() => import('./features/admin/AdminDashboardPag
 const UpgradePage = lazy(() => import('./features/payment/UpgradePage'));
 const OnboardingPage = lazy(() => import('./features/restaurant/OnboardingPage'));
 const SubscriptionPage = lazy(() => import('./features/restaurant/SubscriptionPage'));
+const WaiterPage = lazy(() => import('./features/waiter/WaiterPage'));
+const AccountPage = lazy(() => import('./features/client/AccountPage'));
 
 function PageLoader() {
   return (
@@ -42,33 +46,41 @@ function PageLoader() {
 function AppRoutes() {
   return (
     <CartProvider>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          {/* Public */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/menu/:slug" element={<ClientMenuPage />} />
-          <Route path="/menu/:slug/cart" element={<CartPage />} />
-          <Route path="/menu/:slug/tip" element={<TipPage />} />
-          <Route path="/menu/:slug/checkout" element={<CheckoutPage />} />
-          <Route path="/menu/:slug/thank-you" element={<ThankYouPage />} />
-          <Route path="/kds/:slug" element={<KitchenScreen />} />
+      <UserRoleProvider>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={<HomePage />} />
+            <Route path="/menu/:slug" element={<ClientMenuPage />} />
+            <Route path="/menu/:slug/cart" element={<CartPage />} />
+            <Route path="/menu/:slug/tip" element={<TipPage />} />
+            <Route path="/menu/:slug/checkout" element={<CheckoutPage />} />
+            <Route path="/menu/:slug/thank-you" element={<ThankYouPage />} />
+            <Route path="/kds/:slug" element={<KitchenScreen />} />
 
-          {/* Protected — requires authentication */}
-          <Route path="/upload" element={<RequireAuth><OCRUploadPage /></RequireAuth>} />
-          <Route path="/menus/:menuId/edit" element={<RequireAuth><MenuEditorPage /></RequireAuth>} />
-          <Route path="/menus/:menuId/translate" element={<RequireAuth><TranslatorPage /></RequireAuth>} />
-          <Route path="/tables/:menuSlug" element={<RequireAuth><TablesPage /></RequireAuth>} />
-          <Route path="/restaurant/dashboard" element={<RequireAuth><RestaurantDashboardPage /></RequireAuth>} />
-          <Route path="/restaurant/:slug/settings" element={<RequireAuth><RestaurantSettingsPage /></RequireAuth>} />
-          <Route path="/restaurant/subscription" element={<RequireAuth><SubscriptionPage /></RequireAuth>} />
-          <Route path="/dashboard" element={<RequireAuth><RestaurantDashboardPage /></RequireAuth>} />
-          <Route path="/dashboard/:slug" element={<RequireAuth><DashboardConversationsPage /></RequireAuth>} />
-          <Route path="/analytics" element={<RequireAuth><DashboardChartsPage /></RequireAuth>} />
-          <Route path="/admin" element={<RequireAuth><AdminDashboardPage /></RequireAuth>} />
-          <Route path="/upgrade" element={<RequireAuth><UpgradePage /></RequireAuth>} />
-          <Route path="/onboarding" element={<RequireAuth><OnboardingPage /></RequireAuth>} />
-        </Routes>
-      </Suspense>
+            {/* Client */}
+            <Route path="/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
+
+            {/* Serveur */}
+            <Route path="/waiter" element={<RequireAuth><WaiterPage /></RequireAuth>} />
+
+            {/* Restaurateur uniquement */}
+            <Route path="/upload" element={<RequireOwner><OCRUploadPage /></RequireOwner>} />
+            <Route path="/menus/:menuId/edit" element={<RequireOwner><MenuEditorPage /></RequireOwner>} />
+            <Route path="/menus/:menuId/translate" element={<RequireOwner><TranslatorPage /></RequireOwner>} />
+            <Route path="/tables/:menuSlug" element={<RequireOwner><TablesPage /></RequireOwner>} />
+            <Route path="/restaurant/dashboard" element={<RequireOwner><RestaurantDashboardPage /></RequireOwner>} />
+            <Route path="/restaurant/:slug/settings" element={<RequireOwner><RestaurantSettingsPage /></RequireOwner>} />
+            <Route path="/restaurant/subscription" element={<RequireOwner><SubscriptionPage /></RequireOwner>} />
+            <Route path="/dashboard" element={<RequireOwner><RestaurantDashboardPage /></RequireOwner>} />
+            <Route path="/dashboard/:slug" element={<RequireOwner><DashboardConversationsPage /></RequireOwner>} />
+            <Route path="/analytics" element={<RequireOwner><DashboardChartsPage /></RequireOwner>} />
+            <Route path="/admin" element={<RequireAuth><AdminDashboardPage /></RequireAuth>} />
+            <Route path="/upgrade" element={<RequireOwner><UpgradePage /></RequireOwner>} />
+            <Route path="/onboarding" element={<RequireOwner><OnboardingPage /></RequireOwner>} />
+          </Routes>
+        </Suspense>
+      </UserRoleProvider>
     </CartProvider>
   );
 }

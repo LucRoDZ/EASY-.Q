@@ -15,15 +15,26 @@ export default function AuthRedirect() {
     async function check() {
       try {
         const token = await getToken();
-        const data = await api.getDashboardMenus(token);
+        const user = await api.getCurrentUser(token);
+
         if (cancelled) return;
-        if (data?.menus?.length > 0) {
-          navigate('/dashboard', { replace: true });
-        } else {
-          navigate('/onboarding', { replace: true });
+
+        if (user.role === 'waiter') {
+          navigate('/waiter', { replace: true });
+          return;
         }
+
+        if (user.role === 'owner') {
+          const data = await api.getDashboardMenus(token);
+          if (cancelled) return;
+          navigate(data?.menus?.length > 0 ? '/dashboard' : '/onboarding', { replace: true });
+          return;
+        }
+
+        // Client (role null ou "client")
+        navigate('/account', { replace: true });
       } catch {
-        if (!cancelled) navigate('/dashboard', { replace: true });
+        if (!cancelled) navigate('/account', { replace: true });
       } finally {
         if (!cancelled) setChecking(false);
       }
