@@ -14,7 +14,6 @@ Also covers:
 
 import pytest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -190,7 +189,7 @@ def test_kds_multiple_concurrent_orders(client, table_with_qr):
 
     # Each order should be retrievable with status=pending
     for order_id in created_ids:
-        res = client.get(f"/api/v1/orders/{order_id}")
+        res = client.get(f"/api/v1/orders/{order_id}", params={"table_token": "tok-abc123"})
         assert res.status_code == 200
         assert res.json()["status"] == "pending"
 
@@ -243,6 +242,7 @@ def test_edit_within_window_succeeds(client, table_with_qr):
     res = client.patch(f"/api/v1/orders/{order_id}", json={
         "items": [{"name": "Salade", "quantity": 1, "price": 9.00}],
         "notes": "sans oignons",
+        "table_token": "tok-abc123",
     })
     assert res.status_code == 200
     data = res.json()
@@ -264,6 +264,7 @@ def test_edit_after_window_returns_409(client, table_with_qr, db_session):
 
     res = client.patch(f"/api/v1/orders/{order_id}", json={
         "items": [{"name": "Pizza", "quantity": 1, "price": 14.00}],
+        "table_token": "tok-abc123",
     })
     assert res.status_code == 409
 
@@ -273,7 +274,7 @@ def test_get_order_returns_seconds_remaining(client, table_with_qr):
     res = client.post("/api/v1/orders", json=_order_body(table_token="tok-abc123"))
     order_id = res.json()["id"]
 
-    res = client.get(f"/api/v1/orders/{order_id}")
+    res = client.get(f"/api/v1/orders/{order_id}", params={"table_token": "tok-abc123"})
     data = res.json()
     assert data["seconds_remaining"] is not None
     assert 1 <= data["seconds_remaining"] <= 120
@@ -287,7 +288,7 @@ def test_get_order_locked_has_no_seconds_remaining(client, table_with_qr, db_ses
     # Manually confirm the order
     client.patch(f"/api/v1/orders/{order_id}/status", params={"status": "confirmed"})
 
-    res = client.get(f"/api/v1/orders/{order_id}")
+    res = client.get(f"/api/v1/orders/{order_id}", params={"table_token": "tok-abc123"})
     assert res.json()["seconds_remaining"] is None
 
 

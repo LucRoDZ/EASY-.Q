@@ -5,15 +5,15 @@ Tests for KDS (Kitchen Display System) endpoints:
   WS    /api/v1/ws/kds/{slug}?token=<token>     — WebSocket connection
 """
 
-import json
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-from app.models import Menu, Order
+from app.models import Order
 from tests.conftest import seed_menu
 
 
 KDS_TOKEN = "kds-dev-token-change-in-production"  # matches config.py default
+KDS_HEADERS = {"Authorization": f"Bearer {KDS_TOKEN}"}
 
 
 # ---------------------------------------------------------------------------
@@ -61,21 +61,24 @@ def test_list_orders_no_token_returns_401(client, test_db):
 def test_list_orders_wrong_token_returns_401(client, test_db):
     """Wrong token → 401."""
     seed_menu(test_db, slug="kds-wrong-token")
-    resp = client.get("/api/v1/kds/kds-wrong-token/orders?token=wrong-secret")
+    resp = client.get(
+        "/api/v1/kds/kds-wrong-token/orders",
+        headers={"Authorization": "Bearer wrong-secret"},
+    )
     assert resp.status_code == 401
 
 
 def test_list_orders_valid_token_returns_200(client, test_db):
     """Valid token → 200 with orders list."""
     seed_menu(test_db, slug="kds-valid")
-    resp = client.get(f"/api/v1/kds/kds-valid/orders?token={KDS_TOKEN}")
+    resp = client.get("/api/v1/kds/kds-valid/orders", headers=KDS_HEADERS)
     assert resp.status_code == 200
     assert "orders" in resp.json()
 
 
 def test_list_orders_unknown_slug_returns_404(client, test_db):
     """Valid token but unknown slug → 404."""
-    resp = client.get(f"/api/v1/kds/nonexistent-restaurant/orders?token={KDS_TOKEN}")
+    resp = client.get("/api/v1/kds/nonexistent-restaurant/orders", headers=KDS_HEADERS)
     assert resp.status_code == 404
 
 
@@ -92,7 +95,7 @@ def test_list_orders_returns_active_orders_only(client, test_db):
     seed_order(test_db, menu_slug=slug, status="done")
     seed_order(test_db, menu_slug=slug, status="cancelled")
 
-    resp = client.get(f"/api/v1/kds/{slug}/orders?token={KDS_TOKEN}")
+    resp = client.get(f"/api/v1/kds/{slug}/orders", headers=KDS_HEADERS)
     assert resp.status_code == 200
     orders = resp.json()["orders"]
     # Only pending + in_progress should be returned (2 active)
@@ -109,7 +112,7 @@ def test_list_orders_empty_when_all_done(client, test_db):
     seed_order(test_db, menu_slug=slug, status="done")
     seed_order(test_db, menu_slug=slug, status="cancelled")
 
-    resp = client.get(f"/api/v1/kds/{slug}/orders?token={KDS_TOKEN}")
+    resp = client.get(f"/api/v1/kds/{slug}/orders", headers=KDS_HEADERS)
     assert resp.json()["orders"] == []
 
 
@@ -119,7 +122,7 @@ def test_list_orders_includes_elapsed_seconds(client, test_db):
     seed_menu(test_db, slug=slug)
     seed_order(test_db, menu_slug=slug)
 
-    resp = client.get(f"/api/v1/kds/{slug}/orders?token={KDS_TOKEN}")
+    resp = client.get(f"/api/v1/kds/{slug}/orders", headers=KDS_HEADERS)
     order = resp.json()["orders"][0]
     assert "elapsed_seconds" in order
     assert "is_overdue" in order
@@ -131,7 +134,7 @@ def test_list_orders_includes_items(client, test_db):
     seed_menu(test_db, slug=slug)
     seed_order(test_db, menu_slug=slug, items=[{"name": "Pizza", "price": 12.0, "quantity": 2}])
 
-    resp = client.get(f"/api/v1/kds/{slug}/orders?token={KDS_TOKEN}")
+    resp = client.get(f"/api/v1/kds/{slug}/orders", headers=KDS_HEADERS)
     order = resp.json()["orders"][0]
     assert order["items"][0]["name"] == "Pizza"
 
@@ -158,8 +161,9 @@ def test_update_status_to_in_progress(client, test_db):
     """PATCH updates status from pending → in_progress."""
     _, order_id = seed_menu_and_order(test_db, slug="kds-status-1")
     resp = client.patch(
-        f"/api/v1/kds/kds-status-1/orders/{order_id}/status?token={KDS_TOKEN}",
+        f"/api/v1/kds/kds-status-1/orders/{order_id}/status",
         json={"status": "in_progress"},
+        headers=KDS_HEADERS,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "in_progress"
@@ -169,8 +173,9 @@ def test_update_status_to_ready(client, test_db):
     """PATCH updates status to ready."""
     _, order_id = seed_menu_and_order(test_db, slug="kds-status-2")
     resp = client.patch(
-        f"/api/v1/kds/kds-status-2/orders/{order_id}/status?token={KDS_TOKEN}",
+        f"/api/v1/kds/kds-status-2/orders/{order_id}/status",
         json={"status": "ready"},
+        headers=KDS_HEADERS,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ready"
@@ -180,8 +185,9 @@ def test_update_status_to_done(client, test_db):
     """PATCH updates status to done."""
     _, order_id = seed_menu_and_order(test_db, slug="kds-status-3")
     resp = client.patch(
-        f"/api/v1/kds/kds-status-3/orders/{order_id}/status?token={KDS_TOKEN}",
+        f"/api/v1/kds/kds-status-3/orders/{order_id}/status",
         json={"status": "done"},
+        headers=KDS_HEADERS,
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "done"
@@ -191,8 +197,9 @@ def test_update_status_persists_to_db(client, test_db):
     """Status change is persisted to the database."""
     _, order_id = seed_menu_and_order(test_db, slug="kds-db-persist")
     client.patch(
-        f"/api/v1/kds/kds-db-persist/orders/{order_id}/status?token={KDS_TOKEN}",
+        f"/api/v1/kds/kds-db-persist/orders/{order_id}/status",
         json={"status": "confirmed"},
+        headers=KDS_HEADERS,
     )
     session = test_db()
     order = session.query(Order).filter(Order.id == order_id).first()
@@ -204,8 +211,9 @@ def test_update_status_invalid_status_returns_400(client, test_db):
     """Invalid status value → 400."""
     _, order_id = seed_menu_and_order(test_db, slug="kds-bad-status")
     resp = client.patch(
-        f"/api/v1/kds/kds-bad-status/orders/{order_id}/status?token={KDS_TOKEN}",
+        f"/api/v1/kds/kds-bad-status/orders/{order_id}/status",
         json={"status": "flying"},
+        headers=KDS_HEADERS,
     )
     assert resp.status_code == 400
 
@@ -214,8 +222,9 @@ def test_update_status_not_found_returns_404(client, test_db):
     """Non-existent order_id → 404."""
     seed_menu(test_db, slug="kds-notfound")
     resp = client.patch(
-        f"/api/v1/kds/kds-notfound/orders/99999/status?token={KDS_TOKEN}",
+        "/api/v1/kds/kds-notfound/orders/99999/status",
         json={"status": "done"},
+        headers=KDS_HEADERS,
     )
     assert resp.status_code == 404
 
@@ -224,8 +233,9 @@ def test_update_done_order_stays_done(client, test_db):
     """Updating a done order silently keeps it done (terminal state)."""
     _, order_id = seed_menu_and_order(test_db, slug="kds-terminal", order_status="done")
     resp = client.patch(
-        f"/api/v1/kds/kds-terminal/orders/{order_id}/status?token={KDS_TOKEN}",
+        f"/api/v1/kds/kds-terminal/orders/{order_id}/status",
         json={"status": "in_progress"},
+        headers=KDS_HEADERS,
     )
     assert resp.status_code == 200
     # Terminal state: DB should still be 'done'

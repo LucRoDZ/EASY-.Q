@@ -12,6 +12,7 @@ import os
 os.environ["DATABASE_URL"] = "sqlite:///./test_easyq.db"
 os.environ["CLERK_JWKS_URL"] = ""  # disable JWKS verification in tests
 os.environ["KDS_SECRET_TOKEN"] = "kds-dev-token-change-in-production"  # use default test token
+os.environ["IS_PRODUCTION"] = "false"  # ensure prod-only guards don't trigger in tests
 
 import json
 import pytest

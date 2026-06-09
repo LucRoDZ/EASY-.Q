@@ -25,6 +25,7 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from sqlalchemy.orm import Session
 
 from app.config import (
+    IS_PRODUCTION,
     STRIPE_PLATFORM_FEE_PERCENT,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_SECRET_KEY,
@@ -206,7 +207,9 @@ async def stripe_webhook(
     payload = await request.body()
 
     if not STRIPE_WEBHOOK_SECRET:
-        # Dev mode: accept unsigned events for local testing
+        if IS_PRODUCTION:
+            raise HTTPException(status_code=500, detail="Webhook secret not configured")
+        # Dev mode only: accept unsigned events for local testing
         try:
             event = stripe.Event.construct_from(
                 stripe.util.convert_to_stripe_object(

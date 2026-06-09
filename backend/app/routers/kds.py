@@ -11,7 +11,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from app.config import KDS_SECRET_TOKEN
@@ -157,10 +157,11 @@ async def kds_websocket(slug: str, ws: WebSocket):
 @router.get("/api/v1/kds/{slug}/orders")
 def list_kds_orders(
     slug: str,
-    token: str | None = None,
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """List active orders for the KDS screen (all non-done orders)."""
+    token = authorization.removeprefix("Bearer ") if authorization else None
     if not _verify_kds_token(token):
         raise HTTPException(status_code=401, detail="Invalid KDS token")
 
@@ -185,10 +186,11 @@ async def update_kds_order_status(
     slug: str,
     order_id: int,
     body: dict,
-    token: str | None = None,
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """Update order status from the KDS screen. Broadcasts to all screens."""
+    token = authorization.removeprefix("Bearer ") if authorization else None
     if not _verify_kds_token(token):
         raise HTTPException(status_code=401, detail="Invalid KDS token")
 

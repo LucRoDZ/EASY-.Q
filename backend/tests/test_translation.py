@@ -16,6 +16,9 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.db import Base, get_db
 from app.models import Menu
+from app.routers.auth import require_authenticated_user
+
+_FAKE_USER = {"sub": "user_test123", "email": "test@example.com"}
 
 
 # ---------------------------------------------------------------------------
@@ -122,13 +125,18 @@ def client(test_db, monkeypatch):
     monkeypatch.setattr(redis_core, "get_translation_cache", AsyncMock(return_value=None))
     monkeypatch.setattr(redis_core, "set_translation_cache", AsyncMock())
 
+    app.dependency_overrides[require_authenticated_user] = lambda: _FAKE_USER
+
     with TestClient(app) as c:
         yield c
+
+    app.dependency_overrides.pop(require_authenticated_user, None)
 
 
 def _create_menu(test_db, menu_data=None, status="ready") -> int:
     session = test_db()
     menu = Menu(
+        restaurant_id="user_test123",
         restaurant_name="Le Bistrot Test",
         slug="le-bistrot-test",
         pdf_path="/tmp/test.pdf",
@@ -195,10 +203,10 @@ def test_translate_unknown_lang_returns_400(client, test_db):
 
 
 def test_translate_missing_menu_returns_404(client):
-    """PATCH /translate for unknown menu_id → 404."""
+    """PATCH /translate for unknown menu_id → 403 (ownership check precedes existence check)."""
     with patch("app.routers.menu.translate_menu", return_value={"sections": [], "wines": []}):
         resp = client.patch("/api/v1/menus/99999/translate?lang=en")
-    assert resp.status_code == 404
+    assert resp.status_code == 403
 
 
 def test_translate_adds_lang_to_languages_field(client, test_db):
@@ -262,6 +270,7 @@ def test_save_translation_overwrites_previous(client, test_db):
     existing_data = dict(MOCK_MENU_DATA)
     existing_data["translations"] = {"en": {"sections": [{"title": "Old English", "items": []}], "wines": []}}
     menu = Menu(
+        restaurant_id="user_test123",
         restaurant_name="Override Test",
         slug="override-test",
         pdf_path="/tmp/x.pdf",
@@ -297,9 +306,9 @@ def test_save_translation_invalid_lang_returns_400(client, test_db):
 
 
 def test_save_translation_not_found_returns_404(client):
-    """PATCH /translations/en for unknown menu → 404."""
+    """PATCH /translations/en for unknown menu → 403 (ownership check precedes existence check)."""
     resp = client.patch("/api/v1/menus/99999/translations/en", json={"sections": [], "wines": []})
-    assert resp.status_code == 404
+    assert resp.status_code == 403
 
 
 def test_save_translation_invalidates_menu_cache(client, test_db, monkeypatch):
@@ -351,7 +360,7 @@ def test_bulk_translate_stores_all_in_db(client, test_db):
 
 
 def test_bulk_translate_not_found_returns_404(client):
-    """POST /translate/all for unknown menu_id → 404."""
+    """POST /translate/all for unknown menu_id → 403 (ownership check precedes existence check)."""
     with patch("app.routers.menu.translate_menu", return_value={"sections": [], "wines": []}):
         resp = client.post("/api/v1/menus/99999/translate/all")
-    assert resp.status_code == 404
+    assert resp.status_code == 403

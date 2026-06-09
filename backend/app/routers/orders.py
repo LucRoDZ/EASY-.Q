@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Order, Table
 from app.routers.auth import require_authenticated_user
+from app.routers.public import limiter
 from app.schemas import OrderCreate, OrderResponse
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ class OrderItemEdit(BaseModel):
 class OrderEditBody(BaseModel):
     items: list[OrderItemEdit] | None = None
     notes: str | None = None
+    table_token: str | None = None
 
 
 def _next_pickup_number(db: Session, menu_slug: str) -> int:
@@ -102,7 +104,8 @@ async def _publish_kds_event(menu_slug: str, event: dict) -> None:
 
 
 @router.post("", response_model=OrderResponse, status_code=201)
-def create_order(body: OrderCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+def create_order(request: Request, body: OrderCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Create a new order from the client menu.
 
     If no table_token is provided, this is a Scan & Go (takeout) order —
@@ -165,11 +168,17 @@ def create_order(body: OrderCreate, background_tasks: BackgroundTasks, db: Sessi
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
-def get_order(order_id: int, db: Session = Depends(get_db)):
-    """Get an order by ID. Auto-locks pending orders past 2 minutes."""
+def get_order(
+    order_id: int,
+    table_token: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Get an order by ID. Requires table_token if the order is associated with a table."""
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if order.table_token and order.table_token != table_token:
+        raise HTTPException(status_code=403, detail="Access denied")
     order = _auto_lock_if_expired(db, order)
     return _build_response(order)
 
@@ -184,6 +193,8 @@ def edit_order(order_id: int, body: OrderEditBody, db: Session = Depends(get_db)
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if order.table_token and order.table_token != body.table_token:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Auto-lock if window expired
     order = _auto_lock_if_expired(db, order)

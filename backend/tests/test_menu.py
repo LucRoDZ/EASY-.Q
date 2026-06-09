@@ -13,8 +13,7 @@ Tests for menu endpoints:
 
 import io
 import json
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from app.models import Menu
 from tests.conftest import seed_menu
@@ -226,12 +225,12 @@ def test_update_menu_restaurant_name(client, test_db, monkeypatch):
 
 
 def test_update_menu_not_found_returns_404(client, monkeypatch):
-    """PATCH on non-existent menu → 404."""
+    """PATCH on non-existent menu → 403 (ownership check precedes existence check)."""
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "invalidate_menu_cache", AsyncMock())
 
     resp = client.patch("/api/v1/menus/99999", json={"sections": []})
-    assert resp.status_code == 404
+    assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -271,12 +270,12 @@ def test_publish_invalid_status_returns_400(client, test_db, monkeypatch):
 
 
 def test_publish_not_found_returns_404(client, monkeypatch):
-    """PATCH /publish on non-existent menu → 404."""
+    """PATCH /publish on non-existent menu → 403 (ownership check precedes existence check)."""
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "invalidate_menu_cache", AsyncMock())
 
     resp = client.patch("/api/v1/menus/99999/publish?publish_status=published")
-    assert resp.status_code == 404
+    assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -314,14 +313,14 @@ def test_translate_invalid_lang_returns_400(client, test_db):
 
 
 def test_translate_not_found_returns_404(client, monkeypatch):
-    """PATCH /translate on non-existent menu → 404."""
+    """PATCH /translate on non-existent menu → 403 (ownership check precedes existence check)."""
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "get_translation_cache", AsyncMock(return_value=None))
     monkeypatch.setattr(redis_core, "set_translation_cache", AsyncMock())
 
     with patch("app.routers.menu.translate_menu", side_effect=_fake_translate):
         resp = client.patch("/api/v1/menus/99999/translate?lang=en")
-    assert resp.status_code == 404
+    assert resp.status_code == 403
 
 
 def test_translate_uses_cache_when_available(client, test_db, monkeypatch):
@@ -398,7 +397,7 @@ def test_bulk_translate_all_languages(client, test_db, monkeypatch):
 
 
 def test_bulk_translate_not_found_returns_404(client, monkeypatch):
-    """POST /translate/all on non-existent menu → 404."""
+    """POST /translate/all on non-existent menu → 403 (ownership check precedes existence check)."""
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "get_translation_cache", AsyncMock(return_value=None))
     monkeypatch.setattr(redis_core, "set_translation_cache", AsyncMock())
@@ -406,7 +405,7 @@ def test_bulk_translate_not_found_returns_404(client, monkeypatch):
 
     with patch("app.routers.menu.translate_menu", side_effect=_fake_translate):
         resp = client.post("/api/v1/menus/99999/translate/all")
-    assert resp.status_code == 404
+    assert resp.status_code == 403
 
 
 def test_bulk_translate_partial_failure_reported(client, test_db, monkeypatch):
@@ -479,6 +478,6 @@ def test_duplicate_menu_handles_slug_collision(client, test_db):
 
 
 def test_duplicate_not_found_returns_404(client):
-    """POST /duplicate on non-existent menu → 404."""
+    """POST /duplicate on non-existent menu → 403 (ownership check precedes existence check)."""
     resp = client.post("/api/v1/menus/99999/duplicate")
-    assert resp.status_code == 404
+    assert resp.status_code == 403

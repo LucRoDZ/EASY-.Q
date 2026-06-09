@@ -324,6 +324,7 @@ async def translate_menu_endpoint(
     menu_id: int,
     lang: str = Query(..., description="Target language: en, fr, es"),
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> TranslateResponse:
     """Auto-translate menu sections + wines to target language via Gemini.
 
@@ -333,8 +334,8 @@ async def translate_menu_endpoint(
         raise HTTPException(status_code=400, detail="lang must be one of: en, fr, es")
 
     menu = db.query(Menu).filter(Menu.id == menu_id).first()
-    if not menu:
-        raise HTTPException(status_code=404, detail="Menu not found")
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     data: dict = {}
     if menu.menu_data:
@@ -379,6 +380,7 @@ async def translate_menu_endpoint(
 async def bulk_translate_menu(
     menu_id: int,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> BulkTranslateResponse:
     """Translate menu to all supported languages (en, fr, es) in one request.
 
@@ -386,8 +388,8 @@ async def bulk_translate_menu(
     in the 'errors' field without failing the whole request.
     """
     menu = db.query(Menu).filter(Menu.id == menu_id).first()
-    if not menu:
-        raise HTTPException(status_code=404, detail="Menu not found")
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     data: dict = {}
     if menu.menu_data:
@@ -434,14 +436,15 @@ async def save_translation(
     lang: str,
     body: SaveTranslationBody,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> TranslateResponse:
     """Persist manually-edited translation for a given language."""
     if lang not in ("en", "fr", "es"):
         raise HTTPException(status_code=400, detail="lang must be one of: en, fr, es")
 
     menu = db.query(Menu).filter(Menu.id == menu_id).first()
-    if not menu:
-        raise HTTPException(status_code=404, detail="Menu not found")
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     data: dict = {}
     if menu.menu_data:
@@ -476,11 +479,12 @@ async def update_menu(
     menu_id: int,
     body: MenuUpdateBody,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> MenuSaveResponse:
     """Persist editor changes. Replaces sections/wines in menu_data and invalidates Redis cache."""
     menu = db.query(Menu).filter(Menu.id == menu_id).first()
-    if not menu:
-        raise HTTPException(status_code=404, detail="Menu not found")
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     data: dict = {}
     if menu.menu_data:
@@ -522,14 +526,15 @@ async def publish_menu(
     menu_id: int,
     publish_status: str = Query(..., description="draft or published"),
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> MenuPublishResponse:
     """Toggle the publish status of a menu (draft / published)."""
     if publish_status not in ("draft", "published"):
         raise HTTPException(status_code=400, detail="publish_status must be 'draft' or 'published'")
 
     menu = db.query(Menu).filter(Menu.id == menu_id).first()
-    if not menu:
-        raise HTTPException(status_code=404, detail="Menu not found")
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     menu.publish_status = publish_status
     db.commit()
@@ -544,11 +549,12 @@ async def publish_menu(
 def duplicate_menu(
     menu_id: int,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
 ) -> MenuDuplicateResponse:
     """Create a copy of a menu with a new slug. The duplicate starts as a draft."""
     source = db.query(Menu).filter(Menu.id == menu_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Menu not found")
+    if not source or source.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Build a unique slug: append -copy, or -copy-2, -copy-3, etc.
     base_slug = f"{source.slug}-copy"

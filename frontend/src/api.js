@@ -460,10 +460,13 @@ export const api = {
 
   async updateKdsOrderStatus(slug, orderId, status, token) {
     const res = await fetch(
-      `${API_BASE}/api/v1/kds/${slug}/orders/${orderId}/status?token=${encodeURIComponent(token)}`,
+      `${API_BASE}/api/v1/kds/${slug}/orders/${orderId}/status`,
       {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ status }),
       }
     );

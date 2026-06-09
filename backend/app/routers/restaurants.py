@@ -137,11 +137,13 @@ def get_profile(slug: str, db: Session = Depends(get_db)) -> RestaurantProfileRe
 # PATCH /{slug}
 # ---------------------------------------------------------------------------
 
-def _assert_restaurant_owner(slug: str, current_user: dict) -> None:
-    """Raise 403 unless current_user owns the restaurant or is a platform admin."""
-    user_org = current_user.get("org_id") or ""
+def _assert_restaurant_owner(slug: str, current_user: dict, db: Session) -> None:
+    """Raise 403 unless current_user owns the restaurant (via Menu.restaurant_id) or is a platform admin."""
     user_id = current_user.get("sub") or ""
-    if user_org != slug and user_id not in ADMIN_USER_IDS:
+    if user_id in ADMIN_USER_IDS:
+        return
+    menu = db.query(Menu).filter(Menu.slug == slug).first()
+    if not menu or menu.restaurant_id != user_id:
         raise HTTPException(status_code=403, detail="Forbidden: not the restaurant owner")
 
 
@@ -153,7 +155,7 @@ def update_profile(
     current_user: dict = Depends(require_authenticated_user),
 ) -> RestaurantProfileResponse:
     """Partial update of restaurant profile fields."""
-    _assert_restaurant_owner(slug, current_user)
+    _assert_restaurant_owner(slug, current_user, db)
     profile = _get_or_create(db, slug)
 
     if body.name is not None:
@@ -193,7 +195,7 @@ async def upload_logo(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_authenticated_user),
 ) -> LogoUploadResponse:
-    _assert_restaurant_owner(slug, current_user)
+    _assert_restaurant_owner(slug, current_user, db)
     """Upload a logo image. Stores on R2 if configured, otherwise local storage."""
     content_type = file.content_type or ""
     if content_type not in ALLOWED_IMAGE_TYPES:
