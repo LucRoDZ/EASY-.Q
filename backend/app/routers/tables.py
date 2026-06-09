@@ -130,7 +130,10 @@ def list_tables(
     user: dict = Depends(require_authenticated_user),
 ) -> list[TableResponse]:
     menu = db.query(Menu).filter(Menu.slug == menu_slug).first()
-    if not menu or menu.restaurant_id != user["sub"]:
+    public_meta = user.get("public_metadata") or {}
+    is_owner = menu and menu.restaurant_id == user["sub"]
+    is_waiter = public_meta.get("role") == "waiter" and public_meta.get("menu_slug") == menu_slug
+    if not menu or (not is_owner and not is_waiter):
         raise HTTPException(status_code=403, detail="Access denied")
     q = db.query(Table).filter(Table.menu_slug == menu_slug)
     if not include_inactive:
