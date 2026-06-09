@@ -5,10 +5,11 @@ import { api } from '../api';
 const UserRoleContext = createContext({ role: null, restaurantId: null, menuSlug: null, loading: true });
 
 export function UserRoleProvider({ children }) {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn, isLoaded } = useAuth();
   const [state, setState] = useState({ role: null, restaurantId: null, menuSlug: null, loading: true });
 
   useEffect(() => {
+    if (!isLoaded) return; // Clerk pas encore initialisé — rester en loading
     if (!isSignedIn) {
       setState({ role: null, restaurantId: null, menuSlug: null, loading: false });
       return;
@@ -31,7 +32,7 @@ export function UserRoleProvider({ children }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [isSignedIn, getToken]);
+  }, [isLoaded, isSignedIn, getToken]);
 
   return <UserRoleContext.Provider value={state}>{children}</UserRoleContext.Provider>;
 }
