@@ -13,7 +13,7 @@ const STATUS_LABEL = {
 export default function WaiterPage() {
   const { getToken } = useAuth();
   const { user } = useUser();
-  const { menuSlug } = useUserRole();
+  const { menuSlug, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
 
   const [tables, setTables] = useState([]);
@@ -21,12 +21,15 @@ export default function WaiterPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (roleLoading) return; // attendre que le contexte soit prêt
+    setError(null);
     if (!menuSlug) {
       setLoading(false);
       setError('Aucun restaurant associé à ce compte. Contactez votre responsable.');
       return;
     }
     let cancelled = false;
+    setLoading(true);
     (async () => {
       try {
         const token = await getToken();
@@ -39,7 +42,7 @@ export default function WaiterPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [menuSlug, getToken]);
+  }, [roleLoading, menuSlug, getToken]);
 
   function handleTableClick(table) {
     navigate(`/menu/${menuSlug}?table=${table.qr_token}`);
