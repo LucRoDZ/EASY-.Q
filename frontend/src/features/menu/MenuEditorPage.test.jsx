@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MenuEditorPage from './MenuEditorPage';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -86,11 +87,11 @@ function renderEditor() {
   api.updateMenu.mockResolvedValue({ menu_id: 1, slug: 'le-bistrot' });
 
   return render(
-    <MemoryRouter initialEntries={['/menus/1/edit']}>
+    <QueryClientProvider client={new QueryClient()}><MemoryRouter initialEntries={['/menus/1/edit']}>
       <Routes>
         <Route path="/menus/:menuId/edit" element={<MenuEditorPage />} />
       </Routes>
-    </MemoryRouter>
+    </MemoryRouter></QueryClientProvider>
   );
 }
 
@@ -104,11 +105,11 @@ describe('MenuEditorPage', () => {
   it('shows a loading spinner initially', () => {
     api.getMenuById.mockReturnValue(new Promise(() => {})); // never resolves
     render(
-      <MemoryRouter initialEntries={['/menus/1/edit']}>
+      <QueryClientProvider client={new QueryClient()}><MemoryRouter initialEntries={['/menus/1/edit']}>
         <Routes>
           <Route path="/menus/:menuId/edit" element={<MenuEditorPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></QueryClientProvider>
     );
     // There's an animated spinner
     expect(document.querySelector('.animate-spin')).toBeTruthy();
@@ -228,11 +229,11 @@ describe('MenuEditorPage', () => {
   it('shows an error message on load failure', async () => {
     api.getMenuById.mockRejectedValue(new Error('Network error'));
     render(
-      <MemoryRouter initialEntries={['/menus/1/edit']}>
+      <QueryClientProvider client={new QueryClient()}><MemoryRouter initialEntries={['/menus/1/edit']}>
         <Routes>
           <Route path="/menus/:menuId/edit" element={<MenuEditorPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></QueryClientProvider>
     );
     await waitFor(() => screen.getByText('Network error'));
   });
