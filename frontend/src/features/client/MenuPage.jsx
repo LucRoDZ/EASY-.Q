@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
-import { Loader2, ShoppingCart, Bell, BellRing, Check, Download, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Loader2, ShoppingCart, Bell, BellRing, Check, Download, X, CalendarCheck } from 'lucide-react';
 import { t } from '../../localization/translations';
 import { api } from '../../api';
 import MenuView, { SearchFilterBar } from '../../components/MenuView';
@@ -90,19 +91,21 @@ function CategoryNav({ sections, activeIndex, lang }) {
 export default function MenuPage() {
   const { slug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { itemCount, setSlug } = useCart();
+  const { itemCount, setSlug, tableToken: storedTableToken, setTableToken } = useCart();
 
   useEffect(() => { setSlug(slug); }, [slug, setSlug]);
 
   const lang = searchParams.get('lang') || 'fr';
-  const tableToken = searchParams.get('table') || '';
+  const urlTableToken = searchParams.get('table') || '';
+  const tableToken = urlTableToken || storedTableToken;
 
-  const [menu, setMenu] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [retryKey, setRetryKey] = useState(0);
+  // Persist the table token from the QR scan so the rest of the flow
+  // (cart → tip → checkout) survives refreshes and URL changes.
+  useEffect(() => {
+    if (urlTableToken) setTableToken(urlTableToken);
+  }, [urlTableToken, setTableToken]);
+
   const [activeSection, setActiveSection] = useState(0);
-  const [googleRating, setGoogleRating] = useState(null);
 
   const [waiterState, setWaiterState] = useState('idle');
 
@@ -138,24 +141,27 @@ export default function MenuPage() {
     );
   }, []);
 
-  // ── Load menu ──────────────────────────────────────────────────────────────
+  // ── Load menu (React Query — cached per slug+lang) ─────────────────────────
 
-  useEffect(() => {
-    setLoading(true);
-    setError('');
-    setMenu(null);
-    api.getMenu(slug, lang)
-      .then(setMenu)
-      .catch(() => setError(t(lang, 'menu.notFound')))
-      .finally(() => setLoading(false));
-  }, [slug, lang, retryKey]);
+  const {
+    data: menu,
+    isLoading: loading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['menu', slug, lang],
+    queryFn: () => api.getMenu(slug, lang),
+    enabled: Boolean(slug),
+  });
+  const error = isError ? t(lang, 'menu.notFound') : '';
 
-  useEffect(() => {
-    if (!slug) return;
-    api.getGoogleRating(slug)
-      .then((data) => { if (data?.rating) setGoogleRating(data); })
-      .catch(() => {});
-  }, [slug]);
+  const { data: googleRatingData } = useQuery({
+    queryKey: ['google-rating', slug],
+    queryFn: () => api.getGoogleRating(slug),
+    enabled: Boolean(slug),
+    staleTime: 10 * 60_000,
+  });
+  const googleRating = googleRatingData?.rating ? googleRatingData : null;
 
   // ── IntersectionObserver for CategoryNav active state ──────────────────────
 
@@ -224,7 +230,7 @@ export default function MenuPage() {
         <p className="text-neutral-600">{error || t(lang, 'menu.notFound')}</p>
         <button
           type="button"
-          onClick={() => setRetryKey((k) => k + 1)}
+          onClick={() => refetch()}
           className="px-4 py-2 bg-black text-white text-sm font-medium rounded-full hover:bg-neutral-800 transition-colors"
         >
           {t(lang, 'menu.retry')}
@@ -302,6 +308,15 @@ export default function MenuPage() {
                 {waiterState === 'idle' && <Bell size={20} />}
               </button>
             )}
+
+            <Link
+              to={`/menu/${slug}/reserve?lang=${lang}`}
+              className="p-3 hover:bg-neutral-800 rounded-full transition-colors"
+              aria-label="Réserver une table"
+              title="Réserver une table"
+            >
+              <CalendarCheck size={20} />
+            </Link>
 
             <Link
               to={cartUrl}

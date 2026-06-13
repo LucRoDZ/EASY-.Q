@@ -1,5 +1,5 @@
-import { useState, memo } from 'react';
-import { GripVertical, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { useState, useRef, memo } from 'react';
+import { GripVertical, ChevronDown, ChevronRight, Trash2, ImagePlus, Loader2 } from 'lucide-react';
 import AllergenIcons from '../../components/AllergenIcons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -35,10 +35,26 @@ function TagPill({ label, active, onClick }) {
 
 // ─── MenuItemRow ───────────────────────────────────────────────────────────────
 
-function MenuItemRow({ item, onUpdate, onDelete, dragListeners }) {
+function MenuItemRow({ item, onUpdate, onDelete, onUploadImage, dragListeners }) {
   const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef(null);
 
   const set = (field, val) => onUpdate({ ...item, [field]: val });
+
+  const handleImageFile = async (file) => {
+    if (!file || !onUploadImage) return;
+    setUploading(true);
+    setUploadError('');
+    try {
+      await onUploadImage(file);
+    } catch (err) {
+      setUploadError(err.message || 'Erreur upload');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const toggleTag = (list, field, val) =>
     set(field, list.includes(val) ? list.filter((x) => x !== val) : [...list, val]);
@@ -94,6 +110,39 @@ function MenuItemRow({ item, onUpdate, onDelete, dragListeners }) {
       {/* Expanded detail */}
       {open && (
         <div className="pb-4 px-8 space-y-3">
+          {onUploadImage && (
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1.5">Photo</label>
+              <div className="flex items-center gap-3">
+                {item.image_url && (
+                  <img
+                    src={item.image_url}
+                    alt={item.name || 'Photo du plat'}
+                    loading="lazy"
+                    className="w-16 h-16 rounded-lg object-cover border border-neutral-200"
+                  />
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => handleImageFile(e.target.files?.[0])}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center gap-1.5 text-xs text-neutral-600 border border-neutral-200 rounded-full px-3 py-1.5 hover:border-neutral-400 transition-colors disabled:opacity-50"
+                >
+                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+                  {item.image_url ? 'Changer la photo' : 'Ajouter une photo'}
+                </button>
+              </div>
+              {uploadError && <p className="text-xs text-red-600 mt-1">{uploadError}</p>}
+            </div>
+          )}
+
           <div>
             <label className="block text-xs text-neutral-500 mb-1">Description</label>
             <input

@@ -55,6 +55,7 @@ function PaymentForm({ amount, currency, slug, lang, clientSecret, orderId }) {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [paymentRequest, setPaymentRequest] = useState(null);
+  const [receiptEmail, setReceiptEmail] = useState('');
 
   // Build PaymentRequest for Apple Pay / Google Pay
   useEffect(() => {
@@ -64,7 +65,7 @@ function PaymentForm({ amount, currency, slug, lang, clientSecret, orderId }) {
       currency: currency.toLowerCase(),
       total: { label: 'Total commande', amount },
       requestPayerName: false,
-      requestPayerEmail: false,
+      requestPayerEmail: true,
     });
     pr.canMakePayment().then((result) => {
       if (result) setPaymentRequest(pr);
@@ -109,9 +110,12 @@ function PaymentForm({ amount, currency, slug, lang, clientSecret, orderId }) {
 
     const returnUrl = `${window.location.origin}/menu/${slug}/thank-you?lang=${lang}${orderId ? `&order_id=${orderId}` : ''}`;
 
+    const confirmParams = { return_url: returnUrl };
+    if (receiptEmail.trim()) confirmParams.receipt_email = receiptEmail.trim();
+
     const { error } = await stripe.confirmPayment({
       elements,
-      confirmParams: { return_url: returnUrl },
+      confirmParams,
     });
 
     if (error) {
@@ -153,6 +157,20 @@ function PaymentForm({ amount, currency, slug, lang, clientSecret, orderId }) {
           <h2 className="font-semibold text-neutral-900 mb-4 text-sm">
             Informations de paiement
           </h2>
+          <div className="mb-4">
+            <label htmlFor="receipt-email" className="block text-xs text-neutral-500 mb-1.5">
+              Email pour le reçu (facultatif)
+            </label>
+            <input
+              id="receipt-email"
+              type="email"
+              value={receiptEmail}
+              onChange={(e) => setReceiptEmail(e.target.value)}
+              placeholder="vous@exemple.fr"
+              autoComplete="email"
+              className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            />
+          </div>
           <PaymentElement
             options={{
               layout: 'tabs',
@@ -193,11 +211,16 @@ export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const lang = searchParams.get('lang') || 'fr';
   const currency = searchParams.get('currency') || 'EUR';
-  const tableToken = searchParams.get('table') || null;
   const tipCents = Math.max(0, parseInt(searchParams.get('tip') || '0', 10));
 
-  const { items, total } = useCart();
+  const { items, total, tableToken: storedTableToken } = useCart();
+  const tableToken = searchParams.get('table') || storedTableToken || null;
   const navigate = useNavigate();
+
+  // Split bill mode: the PaymentIntent already exists (created by /payments/split)
+  const splitSecret = searchParams.get('secret') || '';
+  const splitAmount = Math.max(0, parseInt(searchParams.get('amount') || '0', 10));
+  const isSplitMode = Boolean(splitSecret);
 
   const [stripePromise, setStripePromise] = useState(null);
   const [clientSecret, setClientSecret] = useState('');
@@ -206,15 +229,15 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Redirect to cart if cart is empty
+  // Redirect to cart if cart is empty (not in split mode — the intent already exists)
   useEffect(() => {
-    if (items.length === 0) {
+    if (!isSplitMode && items.length === 0) {
       navigate(`/menu/${slug}/cart?lang=${lang}&currency=${currency}`);
     }
-  }, [items.length, slug, lang, currency, navigate]);
+  }, [isSplitMode, items.length, slug, lang, currency, navigate]);
 
   const initialise = useCallback(async () => {
-    if (items.length === 0) return;
+    if (!isSplitMode && items.length === 0) return;
     setLoading(true);
     setError('');
     try {
@@ -223,7 +246,16 @@ export default function CheckoutPage() {
       if (!publishable_key) throw new Error('Stripe non configuré');
       setStripePromise(loadStripe(publishable_key));
 
-      // 2. Create PaymentIntent
+      // 2a. Split mode: reuse the existing PaymentIntent
+      if (isSplitMode) {
+        setClientSecret(splitSecret);
+        setIntentAmount(splitAmount);
+        const splitOrderId = parseInt(searchParams.get('order_id') || '0', 10);
+        if (splitOrderId) setOrderId(splitOrderId);
+        return;
+      }
+
+      // 2b. Create PaymentIntent from the cart
       const cartItems = items.map((i) => ({
         name: i.name,
         price: i.price,
@@ -244,7 +276,8 @@ export default function CheckoutPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug, items, currency, tableToken, tipCents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, items, currency, tableToken, tipCents, isSplitMode, splitSecret, splitAmount]);
 
   useEffect(() => {
     initialise();

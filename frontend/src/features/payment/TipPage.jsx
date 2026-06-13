@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft, Heart } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { t } from '../../localization/translations';
 
 function formatPrice(amount, currency) {
   try {
@@ -18,45 +19,7 @@ function formatPrice(amount, currency) {
   }
 }
 
-const TIP_PRESETS = [
-  { label: 'Sans pourboire', pct: 0 },
-  { label: '5 %',  pct: 5 },
-  { label: '10 %', pct: 10 },
-  { label: '15 %', pct: 15 },
-];
-
-const LABELS = {
-  fr: {
-    back: 'Panier',
-    title: 'Ajouter un pourboire',
-    subtitle: "Votre geste est apprécié par toute l'équipe.",
-    custom: 'Montant libre',
-    confirm: 'Confirmer',
-    subtotal: 'Sous-total',
-    tip: 'Pourboire',
-    total: 'Total',
-  },
-  en: {
-    back: 'Cart',
-    title: 'Add a tip',
-    subtitle: 'Your generosity is appreciated by the whole team.',
-    custom: 'Custom amount',
-    confirm: 'Confirm',
-    subtotal: 'Subtotal',
-    tip: 'Tip',
-    total: 'Total',
-  },
-  es: {
-    back: 'Carrito',
-    title: 'Añadir propina',
-    subtitle: 'Tu generosidad es apreciada por todo el equipo.',
-    custom: 'Monto personalizado',
-    confirm: 'Confirmar',
-    subtotal: 'Subtotal',
-    tip: 'Propina',
-    total: 'Total',
-  },
-};
+const TIP_PRESETS = [0, 5, 10, 15];
 
 export default function TipPage() {
   const { slug } = useParams();
@@ -65,10 +28,19 @@ export default function TipPage() {
 
   const lang = searchParams.get('lang') || 'fr';
   const currency = searchParams.get('currency') || 'EUR';
-  const tableToken = searchParams.get('table') || '';
 
-  const { total } = useCart();
-  const lbl = LABELS[lang] || LABELS.fr;
+  const { total, tableToken: storedTableToken } = useCart();
+  const tableToken = searchParams.get('table') || storedTableToken || '';
+  const lbl = {
+    back: t(lang, 'tip.back'),
+    title: t(lang, 'tip.title'),
+    subtitle: t(lang, 'tip.subtitle'),
+    custom: t(lang, 'tip.custom'),
+    confirm: t(lang, 'tip.confirm'),
+    subtotal: t(lang, 'tip.subtotal'),
+    tip: t(lang, 'tip.tip'),
+    total: t(lang, 'tip.total'),
+  };
 
   const [selectedPct, setSelectedPct] = useState(10); // default 10%
   const [customAmount, setCustomAmount] = useState('');
@@ -115,7 +87,8 @@ export default function TipPage() {
 
         {/* Preset buttons */}
         <div className="grid grid-cols-2 gap-3">
-          {TIP_PRESETS.map(({ label, pct }) => {
+          {TIP_PRESETS.map((pct) => {
+            const label = pct === 0 ? t(lang, 'tip.none') : `${pct} %`;
             const active = !useCustom && selectedPct === pct;
             return (
               <button

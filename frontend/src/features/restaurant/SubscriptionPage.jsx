@@ -15,6 +15,14 @@ import { useAuth } from '@clerk/clerk-react';
 import { Loader2, CheckCircle, ArrowLeft, Zap, CreditCard } from 'lucide-react';
 import { api } from '../../api';
 
+const FREE_LIMITS = [
+  '1 menu maximum',
+  '10 tables maximum',
+  'Analytics : non inclus',
+  'Traductions automatiques : non incluses',
+  'Écran cuisine (KDS) : non inclus',
+];
+
 const PRO_FEATURES = [
   'Menus illimités',
   'Chatbot IA illimité',
@@ -139,6 +147,18 @@ export default function SubscriptionPage() {
                 {isPro ? 'Actif' : 'Gratuit'}
               </div>
             </div>
+
+            {/* Free plan limits */}
+            {!isPro && (
+              <div className="bg-white rounded-xl border border-neutral-200 p-6 space-y-3">
+                <h2 className="font-semibold text-neutral-900 text-sm">Limites du plan Gratuit</h2>
+                <ul className="space-y-1.5">
+                  {FREE_LIMITS.map((l) => (
+                    <li key={l} className="text-sm text-neutral-500">• {l}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Pro features list */}
             {!isPro && (

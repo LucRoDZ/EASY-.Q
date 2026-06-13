@@ -61,7 +61,7 @@ function OrderTimer({ createdAt, isOverdue }) {
   );
 }
 
-function OrderCard({ order, onAdvance }) {
+function OrderCard({ order, onAdvance, onMarkUnavailable }) {
   const items = order.items || [];
 
   return (
@@ -69,12 +69,17 @@ function OrderCard({ order, onAdvance }) {
       <div className="flex items-start justify-between mb-3">
         <div>
           <span className="text-xl font-bold text-white">
-            {order.table_token
+            {order.table_number
+              ? `Table ${order.table_number}`
+              : order.table_token
               ? `Table ${order.table_token.slice(0, 6)}`
               : order.pickup_number
               ? `À emporter #${order.pickup_number}`
               : 'À emporter'}
           </span>
+          {order.table_label && (
+            <span className="ml-2 text-xs text-neutral-400">{order.table_label}</span>
+          )}
           <span className="ml-2 text-xs text-neutral-500">#{order.id}</span>
         </div>
         {order.created_at && (
@@ -84,13 +89,23 @@ function OrderCard({ order, onAdvance }) {
 
       <ul className="space-y-1 mb-3">
         {items.map((item, i) => (
-          <li key={i} className="flex items-baseline gap-2">
+          <li key={i} className="flex items-baseline gap-2 group">
             <span className="text-sm font-medium text-white">
               {item.quantity}×
             </span>
             <span className="text-sm text-neutral-300">{item.name}</span>
             {item.notes && (
               <span className="text-xs text-neutral-500 italic">({item.notes})</span>
+            )}
+            {onMarkUnavailable && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onMarkUnavailable(item.name); }}
+                title={`Marquer « ${item.name} » en rupture`}
+                aria-label={`Rupture — ${item.name}`}
+                className="ml-auto text-neutral-600 hover:text-red-400 text-xs px-1.5 transition-colors opacity-60 hover:opacity-100"
+              >
+                ✕ rupture
+              </button>
             )}
           </li>
         ))}
@@ -124,6 +139,7 @@ export default function KitchenScreen() {
   const [orders, setOrders] = useState([]);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
   const wsRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const reconnectDelay = useRef(1000);
@@ -247,6 +263,16 @@ export default function KitchenScreen() {
     }
   }, [orders, slug, token]);
 
+  const markUnavailable = useCallback(async (itemName) => {
+    try {
+      await api.setItemAvailability(slug, itemName, false, token);
+      setToast(`« ${itemName} » marqué indisponible`);
+    } catch {
+      setToast(`Échec — impossible de marquer « ${itemName} »`);
+    }
+    setTimeout(() => setToast(''), 3000);
+  }, [slug, token]);
+
   if (!token) {
     return (
       <div className="min-h-dvh bg-neutral-900 flex items-center justify-center">
@@ -287,6 +313,12 @@ export default function KitchenScreen() {
         </div>
       )}
 
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 bg-neutral-800 border border-neutral-700 text-white text-sm px-4 py-3 rounded-xl shadow-lg">
+          {toast}
+        </div>
+      )}
+
       {!connected && !error && (
         <div className="flex items-center gap-2 px-4 py-2 text-neutral-500 text-sm">
           <Loader2 size={14} className="animate-spin" />
@@ -320,6 +352,7 @@ export default function KitchenScreen() {
                       key={order.id}
                       order={order}
                       onAdvance={col.nextStatus ? advanceOrder : null}
+                      onMarkUnavailable={markUnavailable}
                     />
                   ))
                 )}

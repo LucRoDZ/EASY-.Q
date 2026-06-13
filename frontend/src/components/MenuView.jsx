@@ -74,6 +74,18 @@ function ItemDetailModal({ item, currency, lang, onClose, onAdd }) {
         style={{ animation: 'slide-up 0.25s ease-out' }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Photo */}
+        {item.image_url && (
+          <div className="w-full aspect-video bg-neutral-100">
+            <img
+              src={item.image_url}
+              alt={item.name}
+              loading="lazy"
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-neutral-100">
           <div className="flex-1 pr-4">
@@ -181,9 +193,11 @@ function ItemDetailModal({ item, currency, lang, onClose, onAdd }) {
 
 function MenuItem({ item, currency, lang, onAdd, onOpenDetail }) {
   const [added, setAdded] = useState(false);
+  const unavailable = item.available === false;
 
   const handleAdd = (e) => {
     e.stopPropagation();
+    if (unavailable) return;
     onAdd(item);
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
@@ -191,13 +205,20 @@ function MenuItem({ item, currency, lang, onAdd, onOpenDetail }) {
 
   return (
     <div
-      className="py-4 border-b border-neutral-100 last:border-b-0 cursor-pointer hover:bg-neutral-50 -mx-2 px-2 rounded-lg transition-colors"
+      className={`py-4 border-b border-neutral-100 last:border-b-0 cursor-pointer hover:bg-neutral-50 -mx-2 px-2 rounded-lg transition-colors ${
+        unavailable ? 'opacity-50' : ''
+      }`}
       onClick={() => onOpenDetail(item)}
     >
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1">
             <h4 className="font-medium text-neutral-900">{item.name}</h4>
+            {unavailable && (
+              <span className="text-xs bg-neutral-200 text-neutral-500 px-2 py-0.5 rounded-full shrink-0 ml-1">
+                {lang === 'fr' ? 'Indisponible' : lang === 'es' ? 'No disponible' : 'Unavailable'}
+              </span>
+            )}
             <ChevronRight className="h-3.5 w-3.5 text-neutral-300 shrink-0" />
           </div>
           {item.description && (
@@ -223,10 +244,21 @@ function MenuItem({ item, currency, lang, onAdd, onOpenDetail }) {
               {formatPrice(item.price, currency)}
             </span>
           )}
+          {item.image_url && (
+            <img
+              src={item.image_url}
+              alt={item.name}
+              loading="lazy"
+              className="w-20 h-20 rounded-lg object-cover border border-neutral-100 shrink-0"
+            />
+          )}
           <button
             onClick={handleAdd}
+            disabled={unavailable}
             className={`flex items-center gap-1 px-3 py-2.5 rounded-full text-sm font-medium transition-all ${
-              added
+              unavailable
+                ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                : added
                 ? 'bg-green-500 text-white'
                 : 'bg-black text-white hover:bg-neutral-800'
             }`}
