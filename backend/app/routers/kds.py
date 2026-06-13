@@ -380,16 +380,22 @@ async def kds_redis_subscriber() -> None:
             await pubsub.psubscribe("kds:*")
             logger.info("KDS Redis subscriber started (pattern kds:*)")
             delay = 1.0  # reset backoff on successful connect
-            async for message in pubsub.listen():
-                if message.get("type") != "pmessage":
-                    continue
+            while True:
+                # get_message uses asyncio.wait_for internally — immune to socket-level timeouts
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=30.0
+                )
+                if message is None:
+                    continue  # normal — no KDS message in 30s, loop again
                 try:
-                    channel: str = message["channel"]  # e.g. "kds:le-bistrot"
+                    channel: str = message.get("channel", "")
                     slug = channel.split(":", 1)[1] if ":" in channel else channel
                     event = json.loads(message["data"])
                     await kds_manager.broadcast(slug, event)
                 except Exception as exc:
                     logger.warning("KDS subscriber message error: %s", exc)
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             logger.warning("KDS subscriber reconnecting after error: %s", exc)
         finally:
