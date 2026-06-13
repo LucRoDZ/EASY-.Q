@@ -215,6 +215,20 @@ def get_pubsub() -> aioredis.client.PubSub:
 
 
 # ---------------------------------------------------------------------------
+# Per-order tracking channel (client order tracking page)
+# ---------------------------------------------------------------------------
+
+def order_channel(order_id: int) -> str:
+    return f"order:{order_id}"
+
+
+async def publish_order_status(order_id: int, event: dict) -> None:
+    """Publish an order status event to the per-order tracking channel."""
+    client = get_client()
+    await client.publish(order_channel(order_id), json.dumps(event, ensure_ascii=False))
+
+
+# ---------------------------------------------------------------------------
 # Waiter calls (hash: waiter:calls:{slug}, field=call_id, value=JSON)
 # ---------------------------------------------------------------------------
 
@@ -242,7 +256,16 @@ async def push_waiter_call(slug: str, call: dict) -> None:
     await client.lpush(hist_key, call_json)
     await client.ltrim(hist_key, 0, 199)
     await client.expire(hist_key, WAITER_CALL_HISTORY_TTL)
-    await client.publish(waiter_channel(slug), call_json)
+    await client.publish(
+        waiter_channel(slug),
+        json.dumps({"type": "waiter_call", "call": call}, ensure_ascii=False),
+    )
+
+
+async def publish_waiter_event(slug: str, event: dict) -> None:
+    """Publish an arbitrary event (order_ready, new_order…) on the waiter channel."""
+    client = get_client()
+    await client.publish(waiter_channel(slug), json.dumps(event, ensure_ascii=False))
 
 
 async def get_waiter_calls(slug: str) -> list[dict]:

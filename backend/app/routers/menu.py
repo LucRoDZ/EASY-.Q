@@ -337,6 +337,9 @@ async def translate_menu_endpoint(
     if not menu or menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    from app.services.subscription_service import check_limit
+    check_limit(user["sub"], "translations", db)
+
     data: dict = {}
     if menu.menu_data:
         try:
@@ -390,6 +393,9 @@ async def bulk_translate_menu(
     menu = db.query(Menu).filter(Menu.id == menu_id).first()
     if not menu or menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    from app.services.subscription_service import check_limit
+    check_limit(user["sub"], "translations", db)
 
     data: dict = {}
     if menu.menu_data:
@@ -445,6 +451,9 @@ async def save_translation(
     menu = db.query(Menu).filter(Menu.id == menu_id).first()
     if not menu or menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    from app.services.subscription_service import check_limit
+    check_limit(user["sub"], "translations", db)
 
     data: dict = {}
     if menu.menu_data:
@@ -579,3 +588,92 @@ def duplicate_menu(
     db.refresh(duplicate)
 
     return MenuDuplicateResponse(menu_id=duplicate.id, slug=duplicate.slug)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /{menu_id}/items/{section_index}/{item_index}/image — item photo upload
+# ---------------------------------------------------------------------------
+
+_ITEM_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+_ITEM_IMAGE_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+_ITEM_IMAGE_MAX_SIDE = 1280  # pixels
+
+
+def _resize_item_image(data: bytes) -> tuple[bytes, str]:
+    """Resize to ≤1280px on the longest side and re-encode as JPEG."""
+    import io as _io
+    from PIL import Image
+
+    img = Image.open(_io.BytesIO(data))
+    img = img.convert("RGB")
+    img.thumbnail((_ITEM_IMAGE_MAX_SIDE, _ITEM_IMAGE_MAX_SIDE))
+    buf = _io.BytesIO()
+    img.save(buf, format="JPEG", quality=82, optimize=True)
+    return buf.getvalue(), "image/jpeg"
+
+
+@router_v1.patch("/{menu_id}/items/{section_index}/{item_index}/image")
+async def upload_item_image(
+    menu_id: int,
+    section_index: int,
+    item_index: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
+    """Upload a photo for a menu item (identified by section + item index)."""
+    menu = db.query(Menu).filter(Menu.id == menu_id).first()
+    if not menu or menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    content_type = file.content_type or ""
+    if content_type not in _ITEM_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid file type — JPEG, PNG or WebP required")
+
+    data = await file.read()
+    if len(data) > _ITEM_IMAGE_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Image too large — max 5 MB")
+
+    try:
+        data, content_type = _resize_item_image(data)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not process image")
+
+    # Locate the item in menu_data
+    try:
+        menu_data = json.loads(menu.menu_data or "{}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Corrupted menu data")
+    sections = menu_data.get("sections", [])
+    if not (0 <= section_index < len(sections)):
+        raise HTTPException(status_code=404, detail="Section not found")
+    items = sections[section_index].get("items", [])
+    if not (0 <= item_index < len(items)):
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # Store on R2 if configured, otherwise local storage
+    from pathlib import Path
+    from app.config import BASE_URL, STORAGE_DIR
+    from app.core import storage as r2
+
+    key = f"items/{menu.slug}/{section_index}-{item_index}.jpg"
+    if r2.storage_configured():
+        await r2.upload_file(key, data, content_type)
+        image_url = r2.public_url(key) or await r2.get_presigned_url(key)
+    else:
+        local_dir = Path(STORAGE_DIR) / "items" / menu.slug
+        local_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"{section_index}-{item_index}.jpg"
+        (local_dir / filename).write_bytes(data)
+        image_url = f"{BASE_URL}/storage/items/{menu.slug}/{filename}"
+
+    items[item_index]["image_url"] = image_url
+    menu.menu_data = json.dumps(menu_data, ensure_ascii=False)
+    db.commit()
+
+    try:
+        await redis_core.invalidate_menu_cache(menu.slug)
+    except Exception as exc:
+        logger.warning("Menu cache invalidation failed for %s: %s", menu.slug, exc)
+
+    return {"image_url": image_url}

@@ -75,6 +75,22 @@ def get_menu_data(menu: Menu, lang: str = "en") -> dict:
         sections = data.get("sections", [])
         wines = data.get("wines", [])
 
+    # Mark items flagged unavailable from the KDS. The outage list stores
+    # base-language names — match translated items by (section, item) index.
+    unavailable = set(menu.unavailable_items or [])
+    if unavailable:
+        base_sections = data.get("sections", [])
+        unavailable_idx = {
+            (si, ii)
+            for si, s in enumerate(base_sections)
+            for ii, it in enumerate(s.get("items", []))
+            if it.get("name") in unavailable
+        }
+        for si, s in enumerate(sections):
+            for ii, it in enumerate(s.get("items", [])):
+                if (si, ii) in unavailable_idx or it.get("name") in unavailable:
+                    it["available"] = False
+
     return {
         "restaurant_name": data.get("restaurant_name", menu.restaurant_name),
         "lang": lang,

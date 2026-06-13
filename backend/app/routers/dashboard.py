@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.models import AuditLog, Conversation, Menu, Table
+from app.models import AuditLog, Conversation, Menu, Order, Table, WaiterCall
 from app.services.conversation_service import (
     list_menu_conversations,
     parse_conversation_messages,
@@ -22,6 +22,16 @@ def _assert_owns_menu(menu: Menu, user: dict) -> None:
     """Raise 403 if the authenticated user does not own this menu."""
     if menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
+
+
+def _assert_owner_or_staff(menu: Menu, user: dict) -> None:
+    """Raise 403 unless the user owns the menu OR is a waiter assigned to it."""
+    if menu.restaurant_id == user["sub"]:
+        return
+    meta = user.get("public_metadata") or {}
+    if meta.get("role") == "waiter" and meta.get("menu_slug") == menu.slug:
+        return
+    raise HTTPException(status_code=403, detail="Access denied")
 
 
 def _parse_menu_counts(menu_data_json: str | None) -> tuple[int, int]:
@@ -145,7 +155,7 @@ async def get_waiter_calls(
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
-    _assert_owns_menu(menu, user)
+    _assert_owner_or_staff(menu, user)
     try:
         calls = await redis_core.get_waiter_calls(slug)
     except Exception as exc:
@@ -163,7 +173,7 @@ async def update_waiter_call_status(
     menu = get_menu_by_slug(db, slug)
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
-    _assert_owns_menu(menu, user)
+    _assert_owner_or_staff(menu, user)
 
     new_status = body.get("status")
     if new_status not in ("pending", "acknowledged", "resolved"):
@@ -180,6 +190,14 @@ async def update_waiter_call_status(
 
     if updated is None:
         raise HTTPException(status_code=404, detail="Call not found")
+
+    # Sync the persisted record (Redis is the realtime queue, DB is history)
+    db_call = db.query(WaiterCall).filter(WaiterCall.call_uid == call_id).first()
+    if db_call:
+        db_call.status = new_status
+        if new_status == "resolved":
+            db_call.resolved_at = func.now()
+        db.commit()
 
     if new_status == "resolved":
         try:
@@ -284,4 +302,176 @@ def get_review_analytics(
         "passives": passives,
         "detractors": detractors,
         "recent": recent,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tables summary — live overview for the waiter screen
+# ---------------------------------------------------------------------------
+
+ACTIVE_ORDER_STATUSES = ("pending", "confirmed", "in_progress", "ready")
+
+
+@router.get("/menus/{slug}/tables-summary")
+def get_tables_summary(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
+    """Per-table live summary: active order counts + pending waiter calls.
+
+    Accessible to the owner and to waiters assigned to this restaurant.
+    Aggregated queries — no N+1.
+    """
+    menu = get_menu_by_slug(db, slug)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    _assert_owner_or_staff(menu, user)
+
+    tables = (
+        db.query(Table)
+        .filter(Table.menu_slug == slug, Table.is_active)
+        .order_by(Table.number)
+        .all()
+    )
+
+    # Active orders grouped by (table_token, status)
+    order_rows = (
+        db.query(Order.table_token, Order.status, func.count(Order.id))
+        .filter(
+            Order.menu_slug == slug,
+            Order.status.in_(ACTIVE_ORDER_STATUSES),
+            Order.table_token.isnot(None),
+        )
+        .group_by(Order.table_token, Order.status)
+        .all()
+    )
+    orders_by_token: dict[str, dict[str, int]] = {}
+    for token, status, count in order_rows:
+        orders_by_token.setdefault(token, {})[status] = count
+
+    # Pending waiter calls grouped by table
+    call_rows = (
+        db.query(WaiterCall.table_id, func.count(WaiterCall.id))
+        .filter(
+            WaiterCall.menu_slug == slug,
+            WaiterCall.status.in_(("pending", "acknowledged")),
+        )
+        .group_by(WaiterCall.table_id)
+        .all()
+    )
+    calls_by_table_id = {table_id: count for table_id, count in call_rows if table_id}
+
+    summary = []
+    for t in tables:
+        counts = orders_by_token.get(t.qr_token, {})
+        summary.append({
+            "id": t.id,
+            "number": t.number,
+            "label": t.label,
+            "capacity": t.capacity,
+            "status": t.status or "available",
+            "qr_token": t.qr_token,
+            "pending_orders": counts.get("pending", 0) + counts.get("confirmed", 0),
+            "in_progress_orders": counts.get("in_progress", 0),
+            "ready_orders": counts.get("ready", 0),
+            "pending_calls": calls_by_table_id.get(t.id, 0),
+        })
+
+    return {"tables": summary}
+
+
+# ---------------------------------------------------------------------------
+# Live stats — realtime widgets for the owner dashboard
+# ---------------------------------------------------------------------------
+
+@router.get("/menus/{slug}/live-stats")
+def get_live_stats(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
+    """Aggregated realtime stats for the dashboard widgets (no N+1)."""
+    from datetime import datetime, timezone as dt_timezone
+    from app.models import Payment
+
+    menu = get_menu_by_slug(db, slug)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    _assert_owner_or_staff(menu, user)
+
+    today_start = datetime.now(dt_timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    total_tables = (
+        db.query(func.count(Table.id))
+        .filter(Table.menu_slug == slug, Table.is_active)
+        .scalar()
+    ) or 0
+    active_tables = (
+        db.query(func.count(Table.id))
+        .filter(Table.menu_slug == slug, Table.is_active, Table.status == "occupied")
+        .scalar()
+    ) or 0
+
+    status_rows = (
+        db.query(Order.status, func.count(Order.id))
+        .filter(Order.menu_slug == slug, Order.status.in_(ACTIVE_ORDER_STATUSES))
+        .group_by(Order.status)
+        .all()
+    )
+    status_counts = dict(status_rows)
+
+    today_revenue = (
+        db.query(func.coalesce(func.sum(Payment.amount), 0))
+        .filter(
+            Payment.menu_slug == slug,
+            Payment.status == "succeeded",
+            Payment.created_at >= today_start,
+        )
+        .scalar()
+    ) or 0
+    today_orders = (
+        db.query(func.count(Order.id))
+        .filter(
+            Order.menu_slug == slug,
+            Order.created_at >= today_start,
+            Order.status != "cancelled",
+        )
+        .scalar()
+    ) or 0
+
+    waiter_calls_pending = (
+        db.query(func.count(WaiterCall.id))
+        .filter(WaiterCall.menu_slug == slug, WaiterCall.status == "pending")
+        .scalar()
+    ) or 0
+
+    recent_orders = (
+        db.query(Order)
+        .filter(Order.menu_slug == slug)
+        .order_by(Order.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    return {
+        "active_tables": active_tables,
+        "total_tables": total_tables,
+        "pending_orders": status_counts.get("pending", 0) + status_counts.get("confirmed", 0),
+        "in_progress_orders": status_counts.get("in_progress", 0),
+        "ready_orders": status_counts.get("ready", 0),
+        "today_revenue_cents": int(today_revenue),
+        "today_orders_count": int(today_orders),
+        "waiter_calls_pending": int(waiter_calls_pending),
+        "recent_orders": [
+            {
+                "id": o.id,
+                "status": o.status,
+                "total": o.total,
+                "currency": o.currency,
+                "items_count": sum(i.get("quantity", 1) for i in (o.items or [])),
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+            }
+            for o in recent_orders
+        ],
     }

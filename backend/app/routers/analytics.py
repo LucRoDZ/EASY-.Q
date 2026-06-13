@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Conversation, Payment
 from app.services.menu_service import get_menu_by_slug
+from app.services.subscription_service import check_limit
 from app.routers.auth import require_authenticated_user
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,7 @@ def get_analytics_summary(
         raise HTTPException(status_code=404, detail="Menu not found")
     if menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
+    check_limit(user["sub"], "analytics", db)
 
     start, end = _parse_period(period, from_date, to_date)
     prev_start, prev_end = _prev_period(start, end)
@@ -198,6 +200,7 @@ def get_revenue_analytics(
         raise HTTPException(status_code=404, detail="Menu not found")
     if menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
+    check_limit(user["sub"], "analytics", db)
 
     start, end = _parse_period(period, from_date, to_date)
 
@@ -246,6 +249,7 @@ def get_covers_analytics(
         raise HTTPException(status_code=404, detail="Menu not found")
     if menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
+    check_limit(user["sub"], "analytics", db)
 
     start, end = _parse_period(period, from_date, to_date)
 
@@ -299,6 +303,7 @@ def get_chatbot_analytics(
         raise HTTPException(status_code=404, detail="Menu not found")
     if menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
+    check_limit(user["sub"], "analytics", db)
 
     start, end = _parse_period(period, from_date, to_date)
 
@@ -358,6 +363,7 @@ def get_items_analytics(
         raise HTTPException(status_code=404, detail="Menu not found")
     if menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
+    check_limit(user["sub"], "analytics", db)
 
     start, end = _parse_period(period, from_date, to_date)
 
@@ -416,6 +422,7 @@ def export_analytics_csv(
         raise HTTPException(status_code=404, detail="Menu not found")
     if menu.restaurant_id != user["sub"]:
         raise HTTPException(status_code=403, detail="Access denied")
+    check_limit(user["sub"], "analytics", db)
 
     try:
         start = datetime.fromisoformat(from_date).replace(tzinfo=timezone.utc)

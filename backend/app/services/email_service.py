@@ -147,6 +147,53 @@ def send_new_payment_email(
     return _send(to, f"Paiement reçu — {amount:.2f} € ({table})", html)
 
 
+def send_receipt_email(
+    to: str,
+    restaurant_name: str,
+    items: list[dict],
+    amount_cents: int,
+    tip_cents: int = 0,
+    payment_intent_id: str = "",
+    paid_at: datetime | None = None,
+    currency: str = "EUR",
+) -> dict[str, Any] | None:
+    """Send the payment receipt to the customer."""
+    time_str = (paid_at or datetime.now()).strftime("%d/%m/%Y à %H:%M")
+    rows = "".join(
+        f"<tr><td>{it.get('name', '?')}</td>"
+        f"<td style='text-align:center'>×{it.get('quantity', 1)}</td>"
+        f"<td style='text-align:right'>{it.get('price', 0):.2f} €</td></tr>"
+        for it in (items or [])
+    )
+    items_table = (
+        f"""<table class="table-grid">
+  <thead><tr><th>Article</th><th style='text-align:center'>Qté</th><th style='text-align:right'>Prix</th></tr></thead>
+  <tbody>{rows}</tbody>
+</table>"""
+        if rows
+        else ""
+    )
+    tip_line = (
+        f"<p style='font-size:13px;color:#737373;'>Pourboire inclus : {tip_cents / 100:.2f} €</p>"
+        if tip_cents > 0
+        else ""
+    )
+    ref = payment_intent_id[-8:] if payment_intent_id else "—"
+    html = _wrap(
+        header_title=restaurant_name,
+        header_sub=f"Reçu de paiement · {time_str}",
+        body_html=f"""
+<p>Merci pour votre visite chez <strong>{restaurant_name}</strong> !</p>
+{items_table}
+{tip_line}
+<div class="amount">{amount_cents / 100:.2f} {currency.upper()}</div>
+<p><span class="badge">Référence : {ref}</span></p>
+<p style="font-size:12px;color:#a3a3a3;">Ce reçu est généré automatiquement par EASY.Q et n'a pas valeur de facture fiscale.</p>
+""",
+    )
+    return _send(to, f"Votre reçu — {restaurant_name} ({amount_cents / 100:.2f} €)", html)
+
+
 def send_low_nps_email(
     to: str,
     nps_score: int,

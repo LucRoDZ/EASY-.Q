@@ -96,6 +96,15 @@ def create_tables_bulk(
     if body.count < 1 or body.count > 200:
         raise HTTPException(status_code=400, detail="count must be between 1 and 200")
 
+    # Free plan: max 10 active tables per restaurant
+    from app.services.subscription_service import check_limit
+    current_count = (
+        db.query(Table)
+        .filter(Table.restaurant_id == user["sub"], Table.is_active)
+        .count()
+    )
+    check_limit(user["sub"], "max_tables", db, current_count=current_count + body.count - 1)
+
     created: list[Table] = []
     for i in range(body.count):
         number = str(body.start_at + i)
@@ -247,8 +256,24 @@ def update_table(
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
     menu = db.query(Menu).filter(Menu.slug == table.menu_slug).first()
-    if not menu or menu.restaurant_id != user["sub"]:
+    if not menu:
         raise HTTPException(status_code=403, detail="Access denied")
+
+    is_owner = menu.restaurant_id == user["sub"]
+    meta = user.get("public_metadata") or {}
+    is_assigned_waiter = (
+        meta.get("role") == "waiter" and meta.get("menu_slug") == table.menu_slug
+    )
+    if not is_owner and not is_assigned_waiter:
+        raise HTTPException(status_code=403, detail="Access denied")
+    # Waiters may only change the table status (open/close a table)
+    if not is_owner and (
+        body.number is not None
+        or body.label is not None
+        or body.capacity is not None
+        or body.is_active is not None
+    ):
+        raise HTTPException(status_code=403, detail="Waiters can only update table status")
 
     if body.number is not None:
         table.number = body.number

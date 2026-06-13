@@ -17,7 +17,7 @@ from app.schemas import (
     WaiterCallRequest,
     FeedbackRequest,
 )
-from app.models import AuditLog, Order, RestaurantProfile, Table
+from app.models import AuditLog, Order, RestaurantProfile, Table, WaiterCall
 from app.services.menu_service import (
     get_menu_by_slug,
     get_menu_data,
@@ -329,6 +329,18 @@ async def call_waiter(slug: str, body: WaiterCallRequest, db: Session = Depends(
         "message": body.message,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+    # Persist in DB (source of truth) — Redis remains the realtime queue
+    db_call = WaiterCall(
+        call_uid=call_id,
+        table_id=table.id if table else None,
+        menu_slug=slug,
+        type="waiter",
+        status="pending",
+        message=body.message,
+    )
+    db.add(db_call)
+    db.commit()
 
     try:
         await redis_core.push_waiter_call(slug, call)

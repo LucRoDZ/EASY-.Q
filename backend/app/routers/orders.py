@@ -101,6 +101,13 @@ async def _publish_kds_event(menu_slug: str, event: dict) -> None:
         await publish_order_event(menu_slug, event)
     except Exception as exc:
         logger.warning("KDS publish failed for %s: %s", menu_slug, exc)
+    # New orders are also pushed to the waiter screen channel
+    if event.get("type") == "new_order":
+        try:
+            from app.core.redis import publish_waiter_event
+            await publish_waiter_event(menu_slug, event)
+        except Exception as exc:
+            logger.warning("Waiter publish failed for %s: %s", menu_slug, exc)
 
 
 @router.post("", response_model=OrderResponse, status_code=201)
@@ -112,6 +119,7 @@ def create_order(request: Request, body: OrderCreate, background_tasks: Backgrou
     a pickup number is generated automatically.
     """
     # Resolve table if token provided
+    table = None
     table_id = None
     if body.table_token:
         table = db.query(Table).filter(Table.qr_token == body.table_token).first()
@@ -154,6 +162,8 @@ def create_order(request: Request, body: OrderCreate, background_tasks: Backgrou
                 "id": order.id,
                 "menu_slug": order.menu_slug,
                 "table_token": order.table_token,
+                "table_number": table.number if table else None,
+                "table_label": table.label if table else None,
                 "items": order.items or [],
                 "notes": order.notes,
                 "total": order.total,
@@ -221,6 +231,7 @@ def edit_order(order_id: int, body: OrderEditBody, db: Session = Depends(get_db)
 def update_order_status(
     order_id: int,
     status: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_authenticated_user),
 ):
@@ -239,6 +250,12 @@ def update_order_status(
     order.status = status
     db.commit()
     db.refresh(order)
+
+    # Notify the client tracking page (best-effort)
+    from app.routers.kds import _order_to_dict, _resolve_table, publish_order_tracking_event
+    order_dict = _order_to_dict(order, _resolve_table(db, order.table_token))
+    background_tasks.add_task(publish_order_tracking_event, order_dict)
+
     return _build_response(order)
 
 

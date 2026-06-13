@@ -1,9 +1,11 @@
-"""Payments router — Stripe Payment Intents + webhook.
+"""Payments router — Stripe Payment Intents + webhook + Connect onboarding.
 
 Routes (prefix /api/v1/payments):
   POST /intent                           — create a PaymentIntent for cart checkout
   POST /webhook                          — Stripe signed webhook handler
   GET  /config                           — return publishable key to the frontend (safe to expose)
+  GET  /connect/onboard                  — create/refresh Stripe Connect Express onboarding link (owner)
+  GET  /connect/status                   — Stripe Connect account status (owner)
   GET  /{payment_intent_id}/receipt.pdf  — download payment receipt as PDF
 """
 
@@ -13,6 +15,7 @@ from datetime import datetime
 
 import stripe
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -25,6 +28,7 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from sqlalchemy.orm import Session
 
 from app.config import (
+    FRONTEND_URL,
     IS_PRODUCTION,
     STRIPE_PLATFORM_FEE_PERCENT,
     STRIPE_PUBLISHABLE_KEY,
@@ -32,9 +36,10 @@ from app.config import (
     STRIPE_WEBHOOK_SECRET,
 )
 from app.db import get_db
-from app.models import Order, Payment, RestaurantProfile
+from app.models import Menu, Order, Payment, RestaurantProfile
 from app.schemas import CreatePaymentIntentRequest, PaymentIntentResponse
-from app.services.email_service import send_new_payment_email
+from app.services.email_service import send_new_payment_email, send_receipt_email
+from app.routers.auth import require_authenticated_user
 from app.routers.subscriptions import require_pro
 
 logger = logging.getLogger(__name__)
@@ -63,6 +68,188 @@ def _euros_to_cents(amount: float) -> int:
 def get_stripe_config():
     """Return the publishable key so the frontend can initialise Stripe.js."""
     return {"publishable_key": STRIPE_PUBLISHABLE_KEY}
+
+
+# ---------------------------------------------------------------------------
+# Split bill — N separate PaymentIntents for one order
+# ---------------------------------------------------------------------------
+
+class SplitRequest(BaseModel):
+    order_id: int
+    parts: int
+
+
+@router.post("/split")
+def create_split_payments(
+    body: SplitRequest,
+    db: Session = Depends(get_db),
+):
+    """Split an order total into N equal parts, each with its own PaymentIntent."""
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    if not 2 <= body.parts <= 10:
+        raise HTTPException(status_code=400, detail="parts must be between 2 and 10")
+
+    order = db.query(Order).filter(Order.id == body.order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.total < 100:
+        raise HTTPException(status_code=400, detail="Montant trop faible pour être partagé")
+
+    require_pro(order.menu_slug, db)
+
+    profile = db.query(RestaurantProfile).filter(RestaurantProfile.slug == order.menu_slug).first()
+    stripe_account_id = profile.stripe_account_id if profile else None
+
+    # ceil(total/parts) so the sum always covers the order total
+    part_amount = -(-order.total // body.parts)
+    if part_amount < 50:
+        raise HTTPException(status_code=400, detail="Chaque part doit être d'au moins 0,50 €")
+
+    parts: list[dict] = []
+    for i in range(body.parts):
+        intent_params: dict = {
+            "amount": part_amount,
+            "currency": order.currency,
+            "capture_method": "automatic",
+            "metadata": {
+                "menu_slug": order.menu_slug,
+                "table_token": order.table_token or "",
+                "order_id": str(order.id),
+                "split_part": f"{i + 1}/{body.parts}",
+            },
+            "automatic_payment_methods": {"enabled": True},
+        }
+        if stripe_account_id:
+            fee = max(1, int(part_amount * STRIPE_PLATFORM_FEE_PERCENT))
+            intent_params["application_fee_amount"] = fee
+            intent_params["transfer_data"] = {"destination": stripe_account_id}
+
+        try:
+            intent = stripe.PaymentIntent.create(**intent_params)
+        except stripe.StripeError as e:
+            logger.error("Stripe split intent error: %s", e)
+            db.rollback()
+            raise HTTPException(status_code=502, detail=str(e))
+
+        payment = Payment(
+            menu_slug=order.menu_slug,
+            table_token=order.table_token,
+            order_id=order.id,
+            payment_intent_id=intent.id,
+            amount=part_amount,
+            tip_amount=0,
+            currency=order.currency,
+            status="pending",
+            items=order.items,
+            split_count=body.parts,
+            split_index=i + 1,
+            split_total=order.total,
+        )
+        db.add(payment)
+        parts.append({
+            "part": i + 1,
+            "amount": part_amount,
+            "client_secret": intent.client_secret,
+            "payment_intent_id": intent.id,
+        })
+
+    db.commit()
+
+    return {
+        "order_id": order.id,
+        "total": order.total,
+        "currency": order.currency,
+        "parts": parts,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Stripe Connect — restaurant onboarding & status
+# ---------------------------------------------------------------------------
+
+def _get_owned_profile(slug: str, user: dict, db: Session) -> RestaurantProfile:
+    """Return the RestaurantProfile for slug, asserting the caller owns the menu."""
+    menu = db.query(Menu).filter(Menu.slug == slug).first()
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    if menu.restaurant_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    profile = db.query(RestaurantProfile).filter(RestaurantProfile.slug == slug).first()
+    if not profile:
+        profile = RestaurantProfile(slug=slug, name=menu.restaurant_name or slug)
+        db.add(profile)
+        db.flush()
+    return profile
+
+
+@router.get("/connect/onboard")
+def connect_onboard(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
+    """Create (or reuse) a Stripe Connect Express account and return an onboarding URL."""
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+
+    profile = _get_owned_profile(slug, user, db)
+
+    try:
+        if not profile.stripe_account_id:
+            account = stripe.Account.create(
+                type="express",
+                country="FR",
+                capabilities={
+                    "card_payments": {"requested": True},
+                    "transfers": {"requested": True},
+                },
+                metadata={"menu_slug": slug},
+            )
+            profile.stripe_account_id = account.id
+            db.commit()
+
+        link = stripe.AccountLink.create(
+            account=profile.stripe_account_id,
+            refresh_url=f"{FRONTEND_URL}/restaurant/{slug}/settings?connect=refresh",
+            return_url=f"{FRONTEND_URL}/restaurant/{slug}/settings?connect=done",
+            type="account_onboarding",
+        )
+    except stripe.StripeError as e:
+        logger.error("Stripe Connect onboarding error for %s: %s", slug, e)
+        raise HTTPException(status_code=502, detail=str(e))
+
+    return {"url": link.url, "stripe_account_id": profile.stripe_account_id}
+
+
+@router.get("/connect/status")
+def connect_status(
+    slug: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_authenticated_user),
+):
+    """Return the Stripe Connect account status for this restaurant."""
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+
+    profile = _get_owned_profile(slug, user, db)
+    if not profile.stripe_account_id:
+        return {"connected": False, "charges_enabled": False, "details_submitted": False}
+
+    try:
+        account = stripe.Account.retrieve(profile.stripe_account_id)
+    except stripe.StripeError as e:
+        logger.error("Stripe Connect status error for %s: %s", slug, e)
+        raise HTTPException(status_code=502, detail=str(e))
+
+    return {
+        "connected": True,
+        "stripe_account_id": profile.stripe_account_id,
+        "charges_enabled": bool(account.get("charges_enabled")),
+        "details_submitted": bool(account.get("details_submitted")),
+        "payouts_enabled": bool(account.get("payouts_enabled")),
+    }
 
 
 @router.post("/intent", response_model=PaymentIntentResponse)
@@ -101,6 +288,21 @@ def create_payment_intent(
     profile = db.query(RestaurantProfile).filter(RestaurantProfile.slug == body.slug).first()
     stripe_account_id = profile.stripe_account_id if profile else None
 
+    # Create the Order first so its id can be embedded in the PaymentIntent metadata
+    from app.routers.orders import _next_pickup_number
+    pickup_number = None if body.table_token else _next_pickup_number(db, body.slug)
+    order = Order(
+        menu_slug=body.slug,
+        table_token=body.table_token,
+        items=[item.model_dump() for item in body.items],
+        total=amount_cents,
+        currency=body.currency.lower(),
+        status="pending",
+        pickup_number=pickup_number,
+    )
+    db.add(order)
+    db.flush()  # assign order.id without committing yet
+
     # Build PaymentIntent params — add Connect split when account is configured
     intent_params: dict = {
         "amount": amount_cents,
@@ -109,6 +311,7 @@ def create_payment_intent(
         "metadata": {
             "menu_slug": body.slug,
             "table_token": body.table_token or "",
+            "order_id": str(order.id),
         },
         "automatic_payment_methods": {"enabled": True},
     }
@@ -122,12 +325,14 @@ def create_payment_intent(
         intent = stripe.PaymentIntent.create(**intent_params)
     except stripe.StripeError as e:
         logger.error("Stripe PaymentIntent error: %s", e)
+        db.rollback()
         raise HTTPException(status_code=502, detail=str(e))
 
-    # Persist a payment record
+    # Persist a payment record linked to the order
     payment = Payment(
         menu_slug=body.slug,
         table_token=body.table_token,
+        order_id=order.id,
         payment_intent_id=intent.id,
         amount=amount_cents,
         tip_amount=tip_cents,
@@ -136,20 +341,8 @@ def create_payment_intent(
         items=[item.model_dump() for item in body.items],
     )
     db.add(payment)
-
-    # Create an Order so KDS is notified on success and pickup number is pre-assigned
-    from app.routers.orders import _next_pickup_number
-    pickup_number = None if body.table_token else _next_pickup_number(db, body.slug)
-    order = Order(
-        menu_slug=body.slug,
-        table_token=body.table_token,
-        items=[item.model_dump() for item in body.items],
-        total=amount_cents,
-        currency=body.currency.lower(),
-        status="pending",
-        pickup_number=pickup_number,
-    )
-    db.add(order)
+    db.flush()
+    order.payment_id = payment.id
     db.commit()
     db.refresh(order)
 
@@ -167,8 +360,9 @@ def _send_receipt_background(
     menu_slug: str,
     table_token: str | None,
     amount_cents: int,
+    customer_email: str | None = None,
 ) -> None:
-    """Send payment receipt email to restaurant owner. Best-effort."""
+    """Send payment notifications: owner alert + customer receipt. Best-effort."""
     from app.db import SessionLocal
     db = SessionLocal()
     try:
@@ -177,14 +371,38 @@ def _send_receipt_background(
             .filter(RestaurantProfile.slug == menu_slug)
             .first()
         )
-        if not profile or not profile.owner_email:
-            return
-        table_label = f"Token {table_token[:8]}" if table_token else "Sans table"
-        send_new_payment_email(
-            to=profile.owner_email,
-            amount=amount_cents / 100,
-            table=table_label,
-        )
+        restaurant_name = profile.name if profile and profile.name else menu_slug
+
+        if profile and profile.owner_email:
+            table_label = f"Token {table_token[:8]}" if table_token else "Sans table"
+            try:
+                send_new_payment_email(
+                    to=profile.owner_email,
+                    amount=amount_cents / 100,
+                    table=table_label,
+                )
+            except Exception as exc:
+                logger.warning("Owner payment email failed for %s: %s", payment_intent_id, exc)
+
+        # Customer receipt (Stripe collects receipt_email at checkout)
+        if customer_email:
+            payment = (
+                db.query(Payment)
+                .filter(Payment.payment_intent_id == payment_intent_id)
+                .first()
+            )
+            try:
+                send_receipt_email(
+                    to=customer_email,
+                    restaurant_name=restaurant_name,
+                    items=payment.items if payment else [],
+                    amount_cents=amount_cents,
+                    tip_cents=payment.tip_amount if payment else 0,
+                    payment_intent_id=payment_intent_id,
+                    currency=payment.currency if payment else "eur",
+                )
+            except Exception as exc:
+                logger.warning("Customer receipt email failed for %s: %s", payment_intent_id, exc)
     except Exception as exc:
         logger.warning("Receipt email failed for payment %s: %s", payment_intent_id, exc)
     finally:
@@ -230,11 +448,17 @@ async def stripe_webhook(
             raise HTTPException(status_code=400, detail=f"Webhook error: {e}")
 
     intent_id: str | None = None
+    metadata_order_id: int | None = None
     event_type: str = event["type"]
 
     if event_type in ("payment_intent.succeeded", "payment_intent.payment_failed"):
         pi = event["data"]["object"]
         intent_id = pi.get("id")
+        try:
+            raw_order_id = (pi.get("metadata") or {}).get("order_id")
+            metadata_order_id = int(raw_order_id) if raw_order_id else None
+        except (TypeError, ValueError):
+            metadata_order_id = None
 
     if intent_id:
         payment = (
@@ -252,21 +476,60 @@ async def stripe_webhook(
                     payment.menu_slug,
                     payment.table_token,
                     payment.amount,
+                    pi.get("receipt_email"),
                 )
-                # Confirm the order and broadcast to KDS
-                order = (
-                    db.query(Order)
-                    .filter(
-                        Order.menu_slug == payment.menu_slug,
-                        Order.table_token == payment.table_token,
-                        Order.status == "pending",
+                # Confirm the order and broadcast to KDS.
+                # Resolve by explicit link (Payment.order_id or PI metadata),
+                # falling back to the legacy slug+token+pending lookup.
+                order_id = payment.order_id or metadata_order_id
+                order = None
+                if order_id:
+                    order = db.query(Order).filter(Order.id == order_id).first()
+                if not order:
+                    order = (
+                        db.query(Order)
+                        .filter(
+                            Order.menu_slug == payment.menu_slug,
+                            Order.table_token == payment.table_token,
+                            Order.status == "pending",
+                        )
+                        .order_by(Order.created_at.desc())
+                        .first()
                     )
-                    .order_by(Order.created_at.desc())
-                    .first()
-                )
+                # Split bill: confirm the order only once every part is paid
+                if order and payment.split_count and payment.split_count > 1:
+                    db.flush()
+                    succeeded_parts = (
+                        db.query(Payment)
+                        .filter(
+                            Payment.order_id == order.id,
+                            Payment.split_count == payment.split_count,
+                            Payment.status == "succeeded",
+                        )
+                        .count()
+                    )
+                    if succeeded_parts < payment.split_count:
+                        logger.info(
+                            "Split payment %s: %d/%d parts paid for order %s",
+                            intent_id, succeeded_parts, payment.split_count, order.id,
+                        )
+                        order = None  # don't confirm yet
+
                 if order:
                     order.status = "confirmed"
+                    if not payment.order_id:
+                        payment.order_id = order.id
+                    if not order.payment_id:
+                        order.payment_id = payment.id
                     db.flush()
+                    table = None
+                    if order.table_token:
+                        from app.models import Table as TableModel
+                        table = (
+                            db.query(TableModel)
+                            .filter(TableModel.qr_token == order.table_token)
+                            .first()
+                        )
                     background_tasks.add_task(
                         _broadcast_order_confirmed,
                         order.id,
@@ -274,6 +537,8 @@ async def stripe_webhook(
                         order.table_token,
                         order.items or [],
                         order.pickup_number,
+                        table.number if table else None,
+                        table.label if table else None,
                     )
             elif event_type == "payment_intent.payment_failed":
                 payment.status = "failed"
@@ -289,6 +554,8 @@ async def _broadcast_order_confirmed(
     table_token: str | None,
     items: list,
     pickup_number: int | None,
+    table_number: str | None = None,
+    table_label: str | None = None,
 ) -> None:
     """Best-effort: broadcast order confirmed event to KDS via Redis."""
     from app.core.redis import publish_order_event
@@ -301,6 +568,8 @@ async def _broadcast_order_confirmed(
                     "id": order_id,
                     "menu_slug": menu_slug,
                     "table_token": table_token,
+                    "table_number": table_number,
+                    "table_label": table_label,
                     "items": items,
                     "status": "confirmed",
                     "pickup_number": pickup_number,
@@ -309,6 +578,28 @@ async def _broadcast_order_confirmed(
         )
     except Exception as exc:
         logger.warning("KDS broadcast failed for order %s: %s", order_id, exc)
+
+    order_payload = {
+        "id": order_id,
+        "menu_slug": menu_slug,
+        "table_token": table_token,
+        "table_number": table_number,
+        "table_label": table_label,
+        "items": items,
+        "status": "confirmed",
+        "pickup_number": pickup_number,
+    }
+
+    # Notify the client tracking page (best-effort)
+    from app.routers.kds import publish_order_tracking_event
+    await publish_order_tracking_event(order_payload)
+
+    # Notify the waiter screen (best-effort)
+    try:
+        from app.core.redis import publish_waiter_event
+        await publish_waiter_event(menu_slug, {"type": "new_order", "order": order_payload})
+    except Exception as exc:
+        logger.warning("Waiter new_order publish failed for order %s: %s", order_id, exc)
 
 
 # ---------------------------------------------------------------------------

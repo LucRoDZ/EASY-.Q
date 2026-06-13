@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import KDS_SECRET_TOKEN
 from app.db import get_db
-from app.models import Order
+from app.models import Order, Table
 from app.services.menu_service import get_menu_by_slug
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,8 @@ async def kds_websocket(slug: str, ws: WebSocket):
             .limit(100)
             .all()
         )
-        snapshot = [_order_to_dict(o) for o in active_orders]
+        tables = _tables_by_token(db, active_orders)
+        snapshot = [_order_to_dict(o, tables.get(o.table_token)) for o in active_orders]
         await ws.send_json({"type": "snapshot", "orders": snapshot})
     except Exception as e:
         logger.warning("KDS snapshot error for %s: %s", slug, e)
@@ -137,10 +138,12 @@ async def kds_websocket(slug: str, ws: WebSocket):
                     try:
                         updated = _update_order_status(db, order_id, new_status)
                         if updated:
+                            order_dict = _order_to_dict(updated, _resolve_table(db, updated.table_token))
                             await kds_manager.broadcast(slug, {
                                 "type": "status_update",
-                                "order": _order_to_dict(updated),
+                                "order": order_dict,
                             })
+                            await publish_order_tracking_event(order_dict)
                     except Exception as e:
                         logger.warning("KDS status update error: %s", e)
                     finally:
@@ -169,6 +172,10 @@ def list_kds_orders(
     if not menu:
         raise HTTPException(status_code=404, detail="Menu not found")
 
+    # KDS is a Pro feature
+    from app.services.subscription_service import check_limit
+    check_limit(menu.restaurant_id, "kds", db)
+
     orders = (
         db.query(Order)
         .filter(
@@ -178,7 +185,8 @@ def list_kds_orders(
         .order_by(Order.created_at.asc())
         .all()
     )
-    return {"orders": [_order_to_dict(o) for o in orders]}
+    tables = _tables_by_token(db, orders)
+    return {"orders": [_order_to_dict(o, tables.get(o.table_token)) for o in orders]}
 
 
 @router.patch("/api/v1/kds/{slug}/orders/{order_id}/status")
@@ -194,6 +202,13 @@ async def update_kds_order_status(
     if not _verify_kds_token(token):
         raise HTTPException(status_code=401, detail="Invalid KDS token")
 
+    # KDS is a Pro feature
+    menu = get_menu_by_slug(db, slug)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    from app.services.subscription_service import check_limit
+    check_limit(menu.restaurant_id, "kds", db)
+
     new_status = body.get("status")
     valid_statuses = {"pending", "confirmed", "in_progress", "ready", "done", "cancelled"}
     if new_status not in valid_statuses:
@@ -206,20 +221,72 @@ async def update_kds_order_status(
     if not updated:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Broadcast status change to all connected KDS screens
+    # Broadcast status change to all connected KDS screens + tracking page
+    order_dict = _order_to_dict(updated, _resolve_table(db, updated.table_token))
     await kds_manager.broadcast(slug, {
         "type": "status_update",
-        "order": _order_to_dict(updated),
+        "order": order_dict,
+    })
+    await publish_order_tracking_event(order_dict)
+
+    return order_dict
+
+
+@router.patch("/api/v1/kds/{slug}/items/availability")
+async def set_item_availability(
+    slug: str,
+    body: dict,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Mark a menu item available/unavailable from the KDS (stock outage).
+
+    Body: {"item_name": "Steak haché", "available": false}
+    """
+    token = authorization.removeprefix("Bearer ") if authorization else None
+    if not _verify_kds_token(token):
+        raise HTTPException(status_code=401, detail="Invalid KDS token")
+
+    menu = get_menu_by_slug(db, slug)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+
+    item_name = (body.get("item_name") or "").strip()
+    available = bool(body.get("available", False))
+    if not item_name:
+        raise HTTPException(status_code=400, detail="item_name is required")
+
+    unavailable = list(menu.unavailable_items or [])
+    if available:
+        unavailable = [n for n in unavailable if n != item_name]
+    elif item_name not in unavailable:
+        unavailable.append(item_name)
+    menu.unavailable_items = unavailable  # reassign so SQLAlchemy tracks the JSON change
+    db.commit()
+
+    # Invalidate the cached public menu so clients see the change immediately
+    try:
+        from app.core.redis import invalidate_menu_cache
+        await invalidate_menu_cache(slug)
+    except Exception as exc:
+        logger.warning("Menu cache invalidation failed for %s: %s", slug, exc)
+
+    # Notify connected clients/screens
+    await kds_manager.broadcast(slug, {
+        "type": "menu_update",
+        "item_name": item_name,
+        "available": available,
+        "unavailable_items": unavailable,
     })
 
-    return _order_to_dict(updated)
+    return {"item_name": item_name, "available": available, "unavailable_items": unavailable}
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _order_to_dict(order: Order) -> dict:
+def _order_to_dict(order: Order, table: Table | None = None) -> dict:
     created_at = order.created_at
     if created_at and created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=timezone.utc)
@@ -230,6 +297,8 @@ def _order_to_dict(order: Order) -> dict:
         "id": order.id,
         "menu_slug": order.menu_slug,
         "table_token": order.table_token,
+        "table_number": table.number if table else None,
+        "table_label": table.label if table else None,
         "items": order.items or [],
         "notes": order.notes,
         "total": order.total,
@@ -238,6 +307,38 @@ def _order_to_dict(order: Order) -> dict:
         "elapsed_seconds": elapsed_seconds,
         "is_overdue": elapsed_seconds > 900,  # 15 minutes
     }
+
+
+def _resolve_table(db: Session, table_token: str | None) -> Table | None:
+    if not table_token:
+        return None
+    return db.query(Table).filter(Table.qr_token == table_token).first()
+
+
+def _tables_by_token(db: Session, orders: list[Order]) -> dict[str, Table]:
+    """Batch-resolve tables for a list of orders (avoids N+1 in snapshots)."""
+    tokens = {o.table_token for o in orders if o.table_token}
+    if not tokens:
+        return {}
+    tables = db.query(Table).filter(Table.qr_token.in_(tokens)).all()
+    return {t.qr_token: t for t in tables}
+
+
+async def publish_order_tracking_event(order_dict: dict) -> None:
+    """Best-effort: push a status_update on the per-order tracking channel.
+
+    When the order becomes ready, also notify the waiter screen.
+    """
+    from app.core.redis import publish_order_status, publish_waiter_event
+    try:
+        await publish_order_status(order_dict["id"], {"type": "status_update", "order": order_dict})
+    except Exception as exc:
+        logger.warning("Order tracking publish failed for order %s: %s", order_dict.get("id"), exc)
+    if order_dict.get("status") == "ready" and order_dict.get("menu_slug"):
+        try:
+            await publish_waiter_event(order_dict["menu_slug"], {"type": "order_ready", "order": order_dict})
+        except Exception as exc:
+            logger.warning("Waiter order_ready publish failed for order %s: %s", order_dict.get("id"), exc)
 
 
 def _update_order_status(db: Session, order_id: int, new_status: str) -> Order | None:

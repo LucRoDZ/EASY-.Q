@@ -17,14 +17,18 @@ from app.routers.restaurants import router as restaurants_router
 from app.routers.payments import router as payments_router
 from app.routers.health import router as health_router
 from app.routers.orders import router as orders_router
+from app.routers.orders_ws import router as orders_ws_router
+from app.routers.waiter_ws import router as waiter_ws_router
 from app.routers.kds import router as kds_router, kds_redis_subscriber
 from app.routers.analytics import router as analytics_router
 from app.routers.admin import router as admin_router
 from app.routers.subscriptions import router as subscriptions_router
+from app.routers.staff import router as staff_router
+from app.routers.reservations import router as reservations_router
 from app.services.file_service import ensure_dirs
 from app.config import (
     CLERK_WEBHOOK_SECRET, CORS_ORIGINS, FRONTEND_URL, IS_PRODUCTION,
-    KDS_SECRET_TOKEN, STORAGE_DIR,
+    KDS_SECRET_TOKEN, SENTRY_DSN, STORAGE_DIR,
 )
 from app.core import redis as redis_core
 from app.routers.public import limiter as chat_limiter
@@ -88,6 +92,10 @@ async def lifespan(app: FastAPI):
 
     await redis_core.close_redis()
 
+
+if SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(dsn=SENTRY_DSN, traces_sample_rate=0.1)
 
 ensure_dirs()
 
@@ -160,10 +168,14 @@ app.include_router(dashboard.router)
 app.include_router(payments_router)
 app.include_router(health_router)
 app.include_router(orders_router)
+app.include_router(orders_ws_router)
+app.include_router(waiter_ws_router)
 app.include_router(kds_router)
 app.include_router(analytics_router)
 app.include_router(admin_router)
 app.include_router(subscriptions_router)
+app.include_router(staff_router)
+app.include_router(reservations_router)
 app.include_router(auth_router)
 
 
