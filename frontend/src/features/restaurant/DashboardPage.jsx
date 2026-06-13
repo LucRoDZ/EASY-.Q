@@ -433,16 +433,18 @@ function ActionTile({ to, icon: Icon, label, sub }) {
 
 function KdsTile({ menu, getToken }) {
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
 
   async function openKds() {
     if (!menu) return;
     setLoading(true);
+    setErr('');
     try {
       const authToken = await getToken();
       const { token } = await api.getKdsToken(menu.slug, authToken);
       window.open(`/kds/${menu.slug}?token=${token}`, '_blank', 'noopener');
-    } catch {
-      window.open(`/kds/${menu.slug}`, '_blank', 'noopener');
+    } catch (e) {
+      setErr(e.message || 'Erreur');
     } finally {
       setLoading(false);
     }
@@ -458,6 +460,7 @@ function KdsTile({ menu, getToken }) {
       {loading ? <Loader2 size={20} className="text-neutral-500 animate-spin" /> : <ChefHat size={20} className="text-neutral-500 dark:text-neutral-400" />}
       <p className="font-medium text-neutral-900 dark:text-white text-sm">Écran cuisine (KDS)</p>
       <p className="text-xs text-neutral-400 dark:text-neutral-500">Ouvre sur la tablette cuisine</p>
+      {err && <p className="text-xs text-red-500 mt-1">{err}</p>}
     </button>
   );
 }

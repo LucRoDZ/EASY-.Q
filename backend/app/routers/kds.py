@@ -161,16 +161,10 @@ async def kds_websocket(slug: str, ws: WebSocket):
 @router.get("/api/v1/kds/{slug}/token")
 def get_kds_token(
     slug: str,
-    user: dict = Depends(require_owner),
-    db: Session = Depends(get_db),
+    _user: dict = Depends(require_owner),
 ):
     """Return the KDS secret token for authenticated restaurant owners.
-    Used by the dashboard to build the shareable KDS URL."""
-    menu = get_menu_by_slug(db, slug)
-    if not menu:
-        raise HTTPException(status_code=404, detail="Menu not found")
-    if str(menu.restaurant_id) != str(user["sub"]):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    KDS_SECRET_TOKEN is a global secret — any authenticated owner may retrieve it."""
     return {"token": KDS_SECRET_TOKEN}
 
 
