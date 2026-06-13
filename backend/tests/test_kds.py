@@ -9,7 +9,13 @@ import pytest
 from unittest.mock import patch
 
 from app.models import Order
-from tests.conftest import seed_menu
+from tests.conftest import seed_menu, seed_pro_subscription
+
+
+@pytest.fixture(autouse=True)
+def _pro_plan(test_db):
+    """KDS is a Pro feature — seed an active Pro subscription for the test user."""
+    seed_pro_subscription(test_db, "user_test123")
 
 
 KDS_TOKEN = "kds-dev-token-change-in-production"  # matches config.py default

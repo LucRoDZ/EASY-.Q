@@ -16,7 +16,7 @@ import json
 from unittest.mock import AsyncMock, patch
 
 from app.models import Menu
-from tests.conftest import seed_menu
+from tests.conftest import seed_menu, seed_pro_subscription
 
 
 # ---------------------------------------------------------------------------
@@ -288,6 +288,7 @@ def _fake_translate(menu: dict, lang: str) -> dict:
 
 
 def test_translate_menu_en(client, test_db, monkeypatch):
+    seed_pro_subscription(test_db, "user_test123")
     """PATCH /translate?lang=en returns translated sections."""
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "get_translation_cache", AsyncMock(return_value=None))
@@ -324,6 +325,7 @@ def test_translate_not_found_returns_404(client, monkeypatch):
 
 
 def test_translate_uses_cache_when_available(client, test_db, monkeypatch):
+    seed_pro_subscription(test_db, "user_test123")
     """If translation cache exists, Gemini is NOT called."""
     import app.core.redis as redis_core
     cached_translation = {"sections": [{"title": "Starters", "items": []}], "wines": []}
@@ -345,6 +347,7 @@ def test_translate_uses_cache_when_available(client, test_db, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_save_manual_translation(client, test_db, monkeypatch):
+    seed_pro_subscription(test_db, "user_test123")
     """PATCH /translations/fr saves the manual translation to menu_data."""
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "invalidate_menu_cache", AsyncMock())
@@ -379,6 +382,7 @@ def test_save_manual_translation_invalid_lang_returns_400(client, test_db):
 # ---------------------------------------------------------------------------
 
 def test_bulk_translate_all_languages(client, test_db, monkeypatch):
+    seed_pro_subscription(test_db, "user_test123")
     """POST /translate/all translates en/fr/es and returns completed=[en,fr,es]."""
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "get_translation_cache", AsyncMock(return_value=None))
@@ -409,6 +413,7 @@ def test_bulk_translate_not_found_returns_404(client, monkeypatch):
 
 
 def test_bulk_translate_partial_failure_reported(client, test_db, monkeypatch):
+    seed_pro_subscription(test_db, "user_test123")
     """If one language fails, it appears in 'errors', others succeed."""
     import app.core.redis as redis_core
     monkeypatch.setattr(redis_core, "get_translation_cache", AsyncMock(return_value=None))

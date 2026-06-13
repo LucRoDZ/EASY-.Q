@@ -21,6 +21,13 @@ from app.routers.auth import require_authenticated_user
 _FAKE_USER = {"sub": "user_test123", "email": "test@example.com"}
 
 
+@pytest.fixture(autouse=True)
+def _pro_plan(test_db):
+    """Translations are a Pro feature — seed an active Pro subscription."""
+    from tests.conftest import seed_pro_subscription
+    seed_pro_subscription(test_db, "user_test123")
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
