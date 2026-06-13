@@ -29,6 +29,7 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRO_PRICE_ID = os.getenv("STRIPE_PRO_PRICE_ID", "")  # Stripe Price ID for Pro plan (49€/month)
 STRIPE_BILLING_WEBHOOK_SECRET = os.getenv("STRIPE_BILLING_WEBHOOK_SECRET", "")
 STRIPE_PLATFORM_FEE_PERCENT = float(os.getenv("STRIPE_PLATFORM_FEE_PERCENT", "0.03"))  # 3% platform fee
+STRIPE_CONNECT_CLIENT_ID = os.getenv("STRIPE_CONNECT_CLIENT_ID", "")  # ca_... for Stripe Connect OAuth
 
 # CORS and Frontend
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
@@ -38,6 +39,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 KDS_SECRET_TOKEN = os.getenv("KDS_SECRET_TOKEN", "kds-dev-token-change-in-production")
 
 # Clerk auth
+CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY", "")  # sk_... for the Clerk backend API (invitations)
 CLERK_WEBHOOK_SECRET = os.getenv("CLERK_WEBHOOK_SECRET", "")  # whsec_... from Clerk dashboard
 CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")  # https://<clerk-domain>/.well-known/jwks.json
 # Comma-separated Clerk user IDs that may access /api/v1/admin/* endpoints
@@ -48,3 +50,6 @@ ADMIN_USER_IDS: list[str] = [
 ]
 
 IS_PRODUCTION = os.getenv("IS_PRODUCTION", "false").lower() == "true"
+
+# Sentry error monitoring (empty = disabled)
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")

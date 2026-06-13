@@ -17,6 +17,7 @@ class Menu(Base):
     status = Column(String(20), nullable=False, default="ready")  # "processing" | "ready" | "error"
     publish_status = Column(String(20), nullable=False, default="draft")  # "draft" | "published"
     ocr_error = Column(String(500), nullable=True)
+    unavailable_items = Column(JSON, nullable=True, default=list)  # noms d'articles en rupture
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     conversations = relationship(
@@ -109,12 +110,17 @@ class Payment(Base):
     id = Column(Integer, primary_key=True, index=True)
     menu_slug = Column(String(100), nullable=False, index=True)
     table_token = Column(String(36), nullable=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=True, index=True)
     payment_intent_id = Column(String(255), nullable=False, unique=True, index=True)
     amount = Column(Integer, nullable=False)       # per-person amount in cents (incl. tip)
     tip_amount = Column(Integer, nullable=False, default=0)  # tip in cents
     currency = Column(String(10), nullable=False, default="eur")
     status = Column(String(20), nullable=False, default="pending")  # pending|succeeded|failed
     items = Column(JSON, nullable=True)            # cart snapshot [{name, price, quantity}]
+    # Split bill (migration 007): N parts paid separately for one order
+    split_count = Column(Integer, nullable=False, default=1)   # total number of parts
+    split_index = Column(Integer, nullable=False, default=1)   # this part's index (1-based)
+    split_total = Column(Integer, nullable=True)               # full order total in cents
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -135,10 +141,61 @@ class Order(Base):
     status = Column(String(20), nullable=False, default="pending")  # pending|confirmed|in_progress|ready|done|cancelled
     notes = Column(Text, nullable=True)
     pickup_number = Column(Integer, nullable=True)  # Scan & Go: daily incremental counter
+    # use_alter breaks the orders↔payments FK cycle for create/drop ordering
+    payment_id = Column(Integer, ForeignKey("payments.id", use_alter=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class WaiterCall(Base):
+    """Appel serveur déclenché par un client (persisté en plus de Redis)."""
+    __tablename__ = "waiter_calls"
+
+    id = Column(Integer, primary_key=True, index=True)
+    call_uid = Column(String(36), unique=True, nullable=False, index=True)  # matches Redis call id
+    table_id = Column(Integer, ForeignKey("tables.id"), nullable=True)
+    menu_slug = Column(String(100), nullable=False, index=True)
+    type = Column(String(20), nullable=False, default="waiter")  # waiter | bill | custom
+    status = Column(String(20), nullable=False, default="pending")  # pending | acknowledged | resolved
+    message = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class StaffMember(Base):
+    """Membre du personnel d'un restaurant (serveur, cuisine, manager)."""
+    __tablename__ = "staff_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    restaurant_id = Column(String(100), nullable=False, index=True)  # Clerk user ID of the owner
+    menu_slug = Column(String(100), nullable=False, index=True)
+    clerk_user_id = Column(String(100), nullable=True, index=True)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True)
+    role = Column(String(20), nullable=False, default="waiter")  # waiter | kitchen | manager
+    pin_code = Column(String(255), nullable=True)  # bcrypt hashed 4-digit PIN
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Reservation(Base):
+    """Réservation de table (formulaire public)."""
+    __tablename__ = "reservations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    menu_slug = Column(String(100), nullable=False, index=True)
+    table_id = Column(Integer, ForeignKey("tables.id"), nullable=True)
+    name = Column(String(255), nullable=False)
+    phone = Column(String(50), nullable=False)
+    email = Column(String(255), nullable=True)
+    party_size = Column(Integer, nullable=False, default=2)
+    date = Column(String(10), nullable=False, index=True)   # YYYY-MM-DD
+    time = Column(String(5), nullable=False)                # HH:MM
+    status = Column(String(20), nullable=False, default="pending")  # pending|confirmed|cancelled|no_show|seated
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class AuditLog(Base):
