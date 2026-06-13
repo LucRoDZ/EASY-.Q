@@ -5,7 +5,7 @@ import { useAuth } from '@clerk/clerk-react';
 import DashboardNav from '../../components/DashboardNav';
 import {
   Loader2, UtensilsCrossed, QrCode, Upload, Plus,
-  ClipboardList, AlertCircle, Languages, Bell, Star, BarChart2,
+  ClipboardList, AlertCircle, Languages, Bell, Star, BarChart2, ChefHat,
 } from 'lucide-react';
 import { api } from '../../api';
 
@@ -461,6 +461,12 @@ function QuickActionsCard({ menu }) {
           icon={BarChart2}
           label="Analytiques"
           sub="Revenus, couverts, chatbot"
+        />
+        <ActionTile
+          to={menu ? `/kds/${menu.slug}` : '/dashboard'}
+          icon={ChefHat}
+          label="Écran cuisine (KDS)"
+          sub="Afficher sur la tablette cuisine"
         />
       </div>
     </div>
