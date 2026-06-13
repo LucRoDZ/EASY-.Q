@@ -431,7 +431,38 @@ function ActionTile({ to, icon: Icon, label, sub }) {
   );
 }
 
-function QuickActionsCard({ menu }) {
+function KdsTile({ menu, getToken }) {
+  const [loading, setLoading] = useState(false);
+
+  async function openKds() {
+    if (!menu) return;
+    setLoading(true);
+    try {
+      const authToken = await getToken();
+      const { token } = await api.getKdsToken(menu.slug, authToken);
+      window.open(`/kds/${menu.slug}?token=${token}`, '_blank', 'noopener');
+    } catch {
+      window.open(`/kds/${menu.slug}`, '_blank', 'noopener');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={openKds}
+      disabled={!menu || loading}
+      className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl p-5 hover:border-neutral-400 dark:hover:border-neutral-500 transition-colors flex flex-col gap-2 text-left disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      {loading ? <Loader2 size={20} className="text-neutral-500 animate-spin" /> : <ChefHat size={20} className="text-neutral-500 dark:text-neutral-400" />}
+      <p className="font-medium text-neutral-900 dark:text-white text-sm">Écran cuisine (KDS)</p>
+      <p className="text-xs text-neutral-400 dark:text-neutral-500">Ouvre sur la tablette cuisine</p>
+    </button>
+  );
+}
+
+function QuickActionsCard({ menu, getToken }) {
   return (
     <div>
       <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-3">
@@ -462,12 +493,7 @@ function QuickActionsCard({ menu }) {
           label="Analytiques"
           sub="Revenus, couverts, chatbot"
         />
-        <ActionTile
-          to={menu ? `/kds/${menu.slug}` : '/dashboard'}
-          icon={ChefHat}
-          label="Écran cuisine (KDS)"
-          sub="Afficher sur la tablette cuisine"
-        />
+        <KdsTile menu={menu} getToken={getToken} />
       </div>
     </div>
   );
@@ -592,7 +618,7 @@ export default function DashboardPage() {
             {activeMenu && <ReviewsAnalyticsCard menu={activeMenu} getToken={getToken} />}
 
             {/* Quick actions */}
-            <QuickActionsCard menu={activeMenu} />
+            <QuickActionsCard menu={activeMenu} getToken={getToken} />
           </>
         )}
       </main>

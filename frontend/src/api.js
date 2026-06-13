@@ -486,6 +486,14 @@ export const api = {
     return res.json();
   },
 
+  async getKdsToken(slug, token) {
+    const res = await fetch(`${API_BASE}/api/v1/kds/${slug}/token`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`KDS token fetch failed (${res.status})`);
+    return res.json(); // { token: "..." }
+  },
+
   async updateKdsOrderStatus(slug, orderId, status, token) {
     const res = await fetch(
       `${API_BASE}/api/v1/kds/${slug}/orders/${orderId}/status`,

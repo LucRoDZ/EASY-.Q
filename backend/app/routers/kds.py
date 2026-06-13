@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.config import KDS_SECRET_TOKEN
 from app.db import get_db
 from app.models import Order, Table
+from app.routers.auth import require_owner
 from app.services.menu_service import get_menu_by_slug
 
 logger = logging.getLogger(__name__)
@@ -156,6 +157,22 @@ async def kds_websocket(slug: str, ws: WebSocket):
 # ---------------------------------------------------------------------------
 # REST endpoints (for initial load & status updates from non-WS clients)
 # ---------------------------------------------------------------------------
+
+@router.get("/api/v1/kds/{slug}/token")
+def get_kds_token(
+    slug: str,
+    user: dict = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    """Return the KDS secret token for authenticated restaurant owners.
+    Used by the dashboard to build the shareable KDS URL."""
+    menu = get_menu_by_slug(db, slug)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    if str(menu.restaurant_id) != str(user["sub"]):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return {"token": KDS_SECRET_TOKEN}
+
 
 @router.get("/api/v1/kds/{slug}/orders")
 def list_kds_orders(
