@@ -62,7 +62,7 @@ export function SortableSection({ id, children }) {
 
 // ─── SectionCard ───────────────────────────────────────────────────────────────
 
-function SectionCard({ section, onUpdate, onDelete, sectionDragListeners }) {
+function SectionCard({ section, onUpdate, onDelete, onUploadItemImage, sectionDragListeners }) {
   const [expanded, setExpanded] = useState(true);
 
   const sensors = useSensors(
@@ -92,12 +92,12 @@ function SectionCard({ section, onUpdate, onDelete, sectionDragListeners }) {
   const itemIds = section.items.map((it) => it.id);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-neutral-200">
+    <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700">
       {/* Section header */}
-      <div className="flex items-center gap-3 p-4 border-b border-neutral-100">
+      <div className="flex items-center gap-3 p-4 border-b border-neutral-100 dark:border-neutral-700">
         <span
           {...sectionDragListeners}
-          className="text-neutral-300 shrink-0 cursor-grab active:cursor-grabbing touch-none"
+          className="text-neutral-300 dark:text-neutral-600 shrink-0 cursor-grab active:cursor-grabbing touch-none"
           aria-label="Déplacer la section"
         >
           <GripVertical className="h-4 w-4" />
@@ -105,12 +105,12 @@ function SectionCard({ section, onUpdate, onDelete, sectionDragListeners }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="shrink-0 text-neutral-400 hover:text-neutral-600"
+          className="shrink-0 text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300"
         >
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
         <input
-          className="flex-1 text-sm font-semibold text-neutral-900 bg-transparent border-0 focus:outline-none focus:ring-0 placeholder:text-neutral-400"
+          className="flex-1 text-sm font-semibold text-neutral-900 dark:text-white bg-transparent border-0 focus:outline-none focus:ring-0 placeholder:text-neutral-400"
           placeholder="Nom de la section"
           value={section.title}
           onChange={(e) => onUpdate({ ...section, title: e.target.value })}
@@ -143,6 +143,7 @@ function SectionCard({ section, onUpdate, onDelete, sectionDragListeners }) {
                       item={item}
                       onUpdate={(updated) => updateItem(item.id, updated)}
                       onDelete={() => deleteItem(item.id)}
+                      onUploadImage={onUploadItemImage ? (file) => onUploadItemImage(item.id, file) : null}
                       dragListeners={listeners}
                     />
                   )}

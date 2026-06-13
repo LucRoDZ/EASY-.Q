@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Loader2, Upload, Save, CheckCircle2, AlertCircle, Building2, Mail, MapPin } from 'lucide-react';
+import { Loader2, Upload, Save, CheckCircle2, AlertCircle, Building2, Mail, MapPin, CreditCard, ExternalLink } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
 import { api } from '../../api';
 
@@ -200,6 +200,98 @@ function ProfilePreview({ profile }) {
   );
 }
 
+// ─── StripeConnectSection ─────────────────────────────────────────────────────
+
+function StripeConnectSection({ slug, getToken }) {
+  const [status, setStatus] = useState(null); // null = loading
+  const [error, setError] = useState('');
+  const [redirecting, setRedirecting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const data = await api.getConnectStatus(slug, token);
+        if (!cancelled) setStatus(data);
+      } catch (e) {
+        if (!cancelled) {
+          setStatus({ connected: false, charges_enabled: false });
+          setError(e.message || '');
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [slug, getToken]);
+
+  const handleOnboard = async () => {
+    setRedirecting(true);
+    setError('');
+    try {
+      const token = await getToken();
+      const { url } = await api.startConnectOnboarding(slug, token);
+      window.location.href = url;
+    } catch (e) {
+      setError(e.message || 'Erreur Stripe Connect');
+      setRedirecting(false);
+    }
+  };
+
+  return (
+    <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6 space-y-4">
+      <h2 className="font-semibold text-neutral-900 flex items-center gap-2">
+        <CreditCard size={16} className="text-neutral-500" />
+        Paiements
+      </h2>
+
+      {status === null ? (
+        <div className="flex items-center gap-2 text-sm text-neutral-500">
+          <Loader2 size={14} className="animate-spin" /> Vérification du compte…
+        </div>
+      ) : status.charges_enabled ? (
+        <div className="space-y-3">
+          <p className="inline-flex items-center gap-2 bg-green-50 text-green-700 text-sm font-medium px-3 py-1.5 rounded-full">
+            <CheckCircle2 size={14} /> Paiements activés
+          </p>
+          <p className="text-xs text-neutral-500">
+            Les paiements de vos clients sont reversés automatiquement sur votre compte Stripe.
+          </p>
+          <a
+            href="https://dashboard.stripe.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-neutral-700 underline hover:text-black"
+          >
+            Ouvrir le dashboard Stripe Express <ExternalLink size={13} />
+          </a>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-neutral-600">
+            {status.connected
+              ? 'Votre compte Stripe est créé mais l’activation n’est pas terminée.'
+              : 'Configurez votre compte Stripe pour recevoir directement les paiements de vos clients.'}
+          </p>
+          <button
+            onClick={handleOnboard}
+            disabled={redirecting}
+            className="inline-flex items-center gap-2 bg-black text-white rounded-full px-5 py-2.5 text-sm font-medium hover:bg-neutral-800 disabled:opacity-60 transition-colors"
+          >
+            {redirecting ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
+            {status.connected ? 'Reprendre la configuration' : 'Configurer les paiements'}
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <p className="flex items-center gap-1.5 text-sm text-red-600">
+          <AlertCircle size={14} /> {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
 // ─── RestaurantSettingsPage ───────────────────────────────────────────────────
 
 export default function RestaurantSettingsPage() {
@@ -261,14 +353,14 @@ export default function RestaurantSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-dvh bg-neutral-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center">
         <Loader2 size={24} className="animate-spin text-neutral-400" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-dvh bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50 dark:bg-neutral-900">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -291,8 +383,8 @@ export default function RestaurantSettingsPage() {
         )}
 
         {/* Logo */}
-        <section className="bg-white rounded-xl border border-neutral-200 p-6 space-y-4">
-          <h2 className="font-semibold text-neutral-900">Identité visuelle</h2>
+        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6 space-y-4">
+          <h2 className="font-semibold text-neutral-900 dark:text-white">Identité visuelle</h2>
           <LogoUpload
             slug={slug}
             logoUrl={logoUrl}
@@ -302,8 +394,8 @@ export default function RestaurantSettingsPage() {
         </section>
 
         {/* Infos générales */}
-        <section className="bg-white rounded-xl border border-neutral-200 p-6 space-y-4">
-          <h2 className="font-semibold text-neutral-900">Informations générales</h2>
+        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6 space-y-4">
+          <h2 className="font-semibold text-neutral-900 dark:text-white">Informations générales</h2>
           <Field label="Nom du restaurant">
             <TextInput value={name} onChange={setName} placeholder="Le Bistrot de la Paix" />
           </Field>
@@ -342,9 +434,12 @@ export default function RestaurantSettingsPage() {
           </Field>
         </section>
 
+        {/* Paiements Stripe Connect */}
+        <StripeConnectSection slug={slug} getToken={getToken} />
+
         {/* Horaires */}
-        <section className="bg-white rounded-xl border border-neutral-200 p-6 space-y-4">
-          <h2 className="font-semibold text-neutral-900">Horaires d&apos;ouverture</h2>
+        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6 space-y-4">
+          <h2 className="font-semibold text-neutral-900 dark:text-white">Horaires d&apos;ouverture</h2>
           <OpeningHoursGrid hours={hours} onChange={setHours} />
         </section>
 

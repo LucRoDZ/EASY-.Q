@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag, CheckCircle, ChefHat } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useUserRole } from '../../context/UserRoleContext';
+import { useToast } from '../../components/ui/Toast';
 import { t } from '../../localization/translations';
 import { api } from '../../api';
 
@@ -64,17 +65,19 @@ export default function CartPage() {
   const currency = searchParams.get('currency') || 'EUR';
   const navigate = useNavigate();
 
-  const { items, updateQuantity, removeItem, total, itemCount, setSlug, clearCart } = useCart();
+  const toast = useToast();
+  const { items, updateQuantity, removeItem, total, itemCount, setSlug, clearCart, tableToken: storedTableToken } = useCart();
   const { role } = useUserRole();
   const isWaiter = role === 'waiter';
+  const tableToken = searchParams.get('table') || storedTableToken || '';
 
   const [sending, setSending] = useState(false);
+  const [splitting, setSplitting] = useState(false);
   const [confirmed, setConfirmed] = useState(null); // { items, total, tableNumber }
 
   useEffect(() => { setSlug(slug); }, [slug, setSlug]);
 
   async function handleWaiterOrder() {
-    const tableToken = searchParams.get('table');
     setSending(true);
     try {
       await api.createOrder({
@@ -86,9 +89,26 @@ export default function CartPage() {
       setConfirmed({ items: [...items], total, tableNumber: searchParams.get('tableNumber') });
       clearCart();
     } catch (err) {
-      alert(`Erreur : ${err.message}`);
+      toast.error(`Erreur : ${err.message}`);
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleSplitBill() {
+    setSplitting(true);
+    try {
+      const order = await api.createOrder({
+        menu_slug: slug,
+        table_token: tableToken || undefined,
+        currency: currency.toLowerCase(),
+        items: items.map(({ name, price, quantity }) => ({ name, price, quantity })),
+      });
+      navigate(`/menu/${slug}/split?order_id=${order.id}&lang=${lang}`);
+    } catch (err) {
+      toast.error(`Erreur : ${err.message}`);
+    } finally {
+      setSplitting(false);
     }
   }
 
@@ -110,7 +130,7 @@ export default function CartPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link
-              to={`/menu/${slug}?lang=${lang}${searchParams.get('table') ? `&table=${searchParams.get('table')}` : ''}`}
+              to={`/menu/${slug}?lang=${lang}${tableToken ? `&table=${tableToken}` : ''}`}
               className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -187,11 +207,11 @@ export default function CartPage() {
                 {!isWaiter && (
                   <>
                     <div className="flex justify-between text-xs text-neutral-400">
-                      <span>TVA 10% (plats)</span>
+                      <span>{t(lang, 'cart.vatFood')}</span>
                       <span>{formatPrice(total * 0.1 / 1.1, currency)}</span>
                     </div>
                     <div className="flex justify-between text-xs text-neutral-400">
-                      <span>TVA 20% (boissons alcoolisées)</span>
+                      <span>{t(lang, 'cart.vatAlcohol')}</span>
                       <span>—</span>
                     </div>
                   </>
@@ -226,14 +246,21 @@ export default function CartPage() {
                   <button
                     disabled={total < 5}
                     onClick={() => {
-                      const tableParam = searchParams.get('table');
                       const params = new URLSearchParams({ lang, currency });
-                      if (tableParam) params.set('table', tableParam);
+                      if (tableToken) params.set('table', tableToken);
                       navigate(`/menu/${slug}/tip?${params}`);
                     }}
                     className="w-full bg-black text-white py-4 rounded-full font-semibold text-lg hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t(lang, 'pay')} · {formatPrice(total, currency)}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={total < 5 || splitting}
+                    onClick={handleSplitBill}
+                    className="w-full mt-3 text-sm text-neutral-500 underline hover:text-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {splitting ? 'Préparation…' : "Partager l'addition"}
                   </button>
                   <div className="mt-4 pt-4 border-t border-neutral-100">
                     <p className="text-xs text-neutral-500 text-center">{t(lang, 'acceptedPayments')}</p>

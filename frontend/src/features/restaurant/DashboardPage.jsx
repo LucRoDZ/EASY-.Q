@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@clerk/clerk-react';
 import DashboardNav from '../../components/DashboardNav';
 import {
@@ -36,7 +37,7 @@ function WaiterCallsBanner({ menu, getToken }) {
 
   useEffect(() => {
     loadCalls();
-    const interval = setInterval(loadCalls, 30_000);
+    const interval = setInterval(loadCalls, 5_000);
     return () => clearInterval(interval);
   }, [loadCalls]);
 
@@ -83,14 +84,110 @@ function WaiterCallsBanner({ menu, getToken }) {
   );
 }
 
+// ─── LiveStatsRow ─────────────────────────────────────────────────────────────
+
+function formatEuros(cents) {
+  try {
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} €`;
+  }
+}
+
+const ORDER_STATUS_FR = {
+  pending: 'En attente',
+  confirmed: 'Confirmée',
+  in_progress: 'En préparation',
+  ready: 'Prête',
+  done: 'Servie',
+  cancelled: 'Annulée',
+};
+
+function LiveStatsRow({ menu, getToken }) {
+  const [stats, setStats] = useState(null);
+
+  const load = useCallback(async () => {
+    if (!menu?.slug) return;
+    try {
+      const token = await getToken();
+      const data = await api.getLiveStats(menu.slug, token);
+      setStats(data);
+    } catch {
+      /* silent */
+    }
+  }, [menu?.slug, getToken]);
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
+  }, [load]);
+
+  if (!stats) return null;
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard
+          label="Tables occupées"
+          value={`${stats.active_tables} / ${stats.total_tables}`}
+          sub="en ce moment"
+        />
+        <StatCard
+          label="Commandes en cours"
+          value={stats.pending_orders + stats.in_progress_orders}
+          sub={`${stats.ready_orders} prête${stats.ready_orders !== 1 ? 's' : ''} à servir`}
+        />
+        <StatCard
+          label="CA du jour"
+          value={formatEuros(stats.today_revenue_cents)}
+          sub={`${stats.today_orders_count} commande${stats.today_orders_count !== 1 ? 's' : ''}`}
+        />
+        <div className={`rounded-xl border p-5 ${stats.waiter_calls_pending > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-neutral-200'}`}>
+          <p className="text-xs text-neutral-500 mb-1">Appels en attente</p>
+          <p className={`text-2xl font-semibold ${stats.waiter_calls_pending > 0 ? 'text-red-700' : 'text-neutral-900'}`}>
+            {stats.waiter_calls_pending}
+          </p>
+          <p className="text-xs text-neutral-400 mt-1">appels serveur</p>
+        </div>
+      </div>
+
+      {stats.recent_orders?.length > 0 && (
+        <div className="bg-white border border-neutral-200 rounded-xl p-5">
+          <h3 className="font-semibold text-sm text-neutral-900 mb-3">Dernières commandes</h3>
+          <div className="divide-y divide-neutral-100">
+            {stats.recent_orders.map((o) => (
+              <div key={o.id} className="py-2.5 flex items-center justify-between gap-3 text-sm">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-neutral-400 text-xs shrink-0">#{o.id}</span>
+                  <span className="text-neutral-700">
+                    {o.items_count} article{o.items_count !== 1 ? 's' : ''}
+                  </span>
+                  <span className="text-xs text-neutral-400">{formatTime(o.created_at)}</span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-xs bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded-full">
+                    {ORDER_STATUS_FR[o.status] || o.status}
+                  </span>
+                  <span className="font-medium text-neutral-900">{formatEuros(o.total)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── StatCard ─────────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, sub }) {
   return (
-    <div className="bg-white rounded-xl border border-neutral-200 p-5">
-      <p className="text-xs text-neutral-500 mb-1">{label}</p>
-      <p className="text-2xl font-semibold text-neutral-900">{value}</p>
-      {sub && <p className="text-xs text-neutral-400 mt-1">{sub}</p>}
+    <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-5">
+      <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{label}</p>
+      <p className="text-2xl font-semibold text-neutral-900 dark:text-white">{value}</p>
+      {sub && <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">{sub}</p>}
     </div>
   );
 }
@@ -325,11 +422,11 @@ function ActionTile({ to, icon: Icon, label, sub }) {
   return (
     <Link
       to={to}
-      className="bg-white border border-neutral-200 rounded-xl p-5 hover:border-neutral-400 transition-colors flex flex-col gap-2"
+      className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl p-5 hover:border-neutral-400 dark:hover:border-neutral-500 transition-colors flex flex-col gap-2"
     >
-      <Icon size={20} className="text-neutral-500" />
-      <p className="font-medium text-neutral-900 text-sm">{label}</p>
-      {sub && <p className="text-xs text-neutral-400">{sub}</p>}
+      <Icon size={20} className="text-neutral-500 dark:text-neutral-400" />
+      <p className="font-medium text-neutral-900 dark:text-white text-sm">{label}</p>
+      {sub && <p className="text-xs text-neutral-400 dark:text-neutral-500">{sub}</p>}
     </Link>
   );
 }
@@ -375,17 +472,13 @@ function QuickActionsCard({ menu }) {
 export default function DashboardPage() {
   const { getToken } = useAuth();
   const navigate = useNavigate();
-  const [menus, setMenus] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
-  useEffect(() => {
-    getToken()
-      .then((token) => api.getDashboardMenus(token))
-      .then((d) => setMenus(d.menus || []))
-      .catch(() => setError('Impossible de charger le tableau de bord.'))
-      .finally(() => setLoading(false));
-  }, [getToken]);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: ['dashboard-menus'],
+    queryFn: async () => api.getDashboardMenus(await getToken()),
+  });
+  const menus = data?.menus || [];
+  const error = isError ? 'Impossible de charger le tableau de bord.' : '';
 
   const activeMenu = menus[0] || null;
   const totalSections = menus.reduce((s, m) => s + (m.section_count || 0), 0);
@@ -393,7 +486,7 @@ export default function DashboardPage() {
   const totalTables = menus.reduce((s, m) => s + (m.table_count || 0), 0);
 
   return (
-    <div className="min-h-dvh bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50 dark:bg-neutral-900">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -438,6 +531,9 @@ export default function DashboardPage() {
           <>
             {/* Waiter call notifications */}
             {activeMenu && <WaiterCallsBanner menu={activeMenu} getToken={getToken} />}
+
+            {/* Live widgets */}
+            {activeMenu && <LiveStatsRow menu={activeMenu} getToken={getToken} />}
 
             {/* Stat row (placeholders — remplis Phase 5) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

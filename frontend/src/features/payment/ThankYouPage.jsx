@@ -14,8 +14,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle, XCircle, ChevronRight, Home, UtensilsCrossed, Download } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronRight, Home, UtensilsCrossed, Download, MapPin } from 'lucide-react';
 import { api } from '../../api';
+import { t } from '../../localization/translations';
 
 // ─── NPS Survey ──────────────────────────────────────────────────────────────
 
@@ -206,34 +207,6 @@ export default function ThankYouPage() {
     return () => clearTimeout(id);
   }, [secondsRemaining]);
 
-  const labels = {
-    fr: {
-      success_title: 'Paiement confirmé !',
-      success_sub: 'Votre commande a été transmise à la cuisine.',
-      error_title: 'Paiement non abouti',
-      error_sub: 'Votre carte n\'a pas été débitée. Veuillez réessayer.',
-      retry: 'Réessayer',
-      back_menu: 'Retour au menu',
-    },
-    en: {
-      success_title: 'Payment confirmed!',
-      success_sub: 'Your order has been sent to the kitchen.',
-      error_title: 'Payment failed',
-      error_sub: 'Your card was not charged. Please try again.',
-      retry: 'Try again',
-      back_menu: 'Back to menu',
-    },
-    es: {
-      success_title: '¡Pago confirmado!',
-      success_sub: 'Su pedido ha sido enviado a la cocina.',
-      error_title: 'Pago fallido',
-      error_sub: 'Su tarjeta no fue cobrada. Por favor, inténtelo de nuevo.',
-      retry: 'Reintentar',
-      back_menu: 'Volver al menú',
-    },
-  };
-  const t = labels[lang] || labels.fr;
-
   return (
     <div className="min-h-dvh bg-neutral-50">
       {/* Header */}
@@ -268,15 +241,15 @@ export default function ThankYouPage() {
 
           <div className="text-center">
             <h1 className="text-2xl font-bold text-neutral-900">
-              {isSuccess ? t.success_title : t.error_title}
+              {isSuccess ? t(lang, 'thankyou.successTitle') : t(lang, 'thankyou.errorTitle')}
             </h1>
             <p className="text-neutral-500 mt-1 text-sm">
-              {isSuccess ? t.success_sub : t.error_sub}
+              {isSuccess ? t(lang, 'thankyou.successSub') : t(lang, 'thankyou.errorSub')}
             </p>
             {isSuccess && pickupNumber && (
               <div className="mt-4 bg-neutral-900 text-white rounded-2xl px-6 py-4 inline-block">
                 <p className="text-xs text-neutral-400 mb-1 uppercase tracking-wide">
-                  {lang === 'fr' ? 'Numéro de retrait' : lang === 'es' ? 'Número de recogida' : 'Pickup number'}
+                  {t(lang, 'thankyou.pickupNumber')}
                 </p>
                 <p className="text-5xl font-bold tabular-nums">#{pickupNumber}</p>
               </div>
@@ -333,7 +306,20 @@ export default function ThankYouPage() {
               to={`/menu/${slug}/checkout?lang=${lang}`}
               className="flex items-center justify-between w-full bg-black text-white rounded-full px-5 py-3.5 font-medium hover:bg-neutral-800 transition-colors"
             >
-              <span>{t.retry}</span>
+              <span>{t(lang, 'thankyou.retry')}</span>
+              <ChevronRight size={18} />
+            </Link>
+          )}
+
+          {isSuccess && orderId && (
+            <Link
+              to={`/menu/${slug}/order/${orderId}?lang=${lang}`}
+              className="flex items-center justify-between w-full bg-black text-white rounded-full px-5 py-3.5 font-medium hover:bg-neutral-800 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <MapPin size={16} />
+                <span>{t(lang, 'thankyou.track')}</span>
+              </div>
               <ChevronRight size={18} />
             </Link>
           )}
@@ -346,7 +332,7 @@ export default function ThankYouPage() {
             >
               <div className="flex items-center gap-2">
                 <Download size={16} className="text-neutral-500" />
-                <span>{lang === 'fr' ? 'Télécharger le reçu' : lang === 'es' ? 'Descargar recibo' : 'Download receipt'}</span>
+                <span>{t(lang, 'thankyou.receipt')}</span>
               </div>
               <ChevronRight size={18} className="text-neutral-400" />
             </a>
@@ -358,7 +344,7 @@ export default function ThankYouPage() {
           >
             <div className="flex items-center gap-2">
               <Home size={16} className="text-neutral-500" />
-              <span>{t.back_menu}</span>
+              <span>{t(lang, 'thankyou.backMenu')}</span>
             </div>
             <ChevronRight size={18} className="text-neutral-400" />
           </Link>

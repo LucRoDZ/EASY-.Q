@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/clerk-react';
 import {
   Loader2, Plus, Save, Eye, AlertCircle, CheckCircle2,
@@ -146,6 +147,8 @@ export default function MenuEditorPage() {
 
   // ── Auto-save ─────────────────────────────────────────────────────────────
 
+  const queryClient = useQueryClient();
+
   const doSave = useCallback(
     async (name, secs, ws) => {
       setSaveStatus('saving');
@@ -153,7 +156,7 @@ export default function MenuEditorPage() {
         const token = await getToken();
         const cleanSections = secs.map(({ id: _sid, ...s }) => ({
           ...s,
-          items: s.items.map(({ id: _iid, _matched_image, image_url, ...it }) => ({
+          items: s.items.map(({ id: _iid, _matched_image, ...it }) => ({
             ...it,
             price: it.price === '' || it.price === undefined ? null : Number(it.price) || null,
             name: it.name || '',
@@ -161,11 +164,14 @@ export default function MenuEditorPage() {
         }));
         await api.updateMenu(menuId, { restaurant_name: name, sections: cleanSections, wines: ws }, token);
         setSaveStatus('saved');
+        // Le menu public est en cache React Query — l'invalider après sauvegarde
+        queryClient.invalidateQueries({ queryKey: ['menu'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-menus'] });
       } catch {
         setSaveStatus('error');
       }
     },
-    [menuId, getToken],
+    [menuId, getToken, queryClient],
   );
 
   const scheduleAutoSave = useCallback(
@@ -186,6 +192,25 @@ export default function MenuEditorPage() {
     setSections(next);
     scheduleAutoSave(restaurantName, next, wines);
   };
+
+  const uploadItemImage = useCallback(async (sectionId, itemId, file) => {
+    const sectionIndex = sections.findIndex((s) => s.id === sectionId);
+    if (sectionIndex === -1) throw new Error('Section introuvable');
+    const itemIndex = sections[sectionIndex].items.findIndex((it) => it.id === itemId);
+    if (itemIndex === -1) throw new Error('Plat introuvable');
+
+    const token = await getToken();
+    const { image_url } = await api.uploadItemImage(menuId, sectionIndex, itemIndex, file, token);
+
+    setSections((prev) =>
+      prev.map((s) =>
+        s.id === sectionId
+          ? { ...s, items: s.items.map((it) => (it.id === itemId ? { ...it, image_url } : it)) }
+          : s
+      )
+    );
+    return image_url;
+  }, [sections, menuId, getToken]);
 
   const deleteSection = (sectionId) => {
     const next = sections.filter((s) => s.id !== sectionId);
@@ -267,7 +292,7 @@ export default function MenuEditorPage() {
   const sectionIds = sections.map((s) => s.id);
 
   return (
-    <div className="min-h-dvh bg-neutral-50">
+    <div className="min-h-dvh bg-neutral-50 dark:bg-neutral-900">
       {/* Header */}
       <header className="bg-black text-white sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
@@ -390,7 +415,7 @@ export default function MenuEditorPage() {
         {/* Editor */}
         <main className={['space-y-4', showPreview ? 'flex-1 min-w-0' : 'max-w-3xl mx-auto w-full'].join(' ')}>
           {sections.length === 0 && (
-            <div className="bg-white rounded-xl border border-neutral-200 p-8 text-center text-neutral-400 text-sm">
+            <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-8 text-center text-neutral-400 dark:text-neutral-500 text-sm">
               Aucune section. Ajoutez-en une ci-dessous.
             </div>
           )}
@@ -408,6 +433,7 @@ export default function MenuEditorPage() {
                       section={section}
                       onUpdate={(updated) => updateSection(section.id, updated)}
                       onDelete={() => deleteSection(section.id)}
+                      onUploadItemImage={(itemId, file) => uploadItemImage(section.id, itemId, file)}
                       sectionDragListeners={listeners}
                     />
                   )}
