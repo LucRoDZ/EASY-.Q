@@ -8,6 +8,10 @@ function storageKey(slug) {
   return slug ? `easyq_cart_${slug}` : 'easyq_cart';
 }
 
+function tableTokenKey(slug) {
+  return slug ? `easyq_table_token_${slug}` : 'easyq_table_token';
+}
+
 export function CartProvider({ children }) {
   const slugRef = useRef(null);
   const [items, setItems] = useState(() => {
@@ -49,6 +53,21 @@ export function CartProvider({ children }) {
     }
   }, [items]);
 
+  // Table QR token — persisted per restaurant so a page refresh or a
+  // navigation that drops ?table=… doesn't lose the table context.
+  const [tableToken, setTableTokenState] = useState('');
+
+  const setTableToken = useCallback((token) => {
+    setTableTokenState(token || '');
+    try {
+      const key = tableTokenKey(slugRef.current);
+      if (token) localStorage.setItem(key, token);
+      else localStorage.removeItem(key);
+    } catch {
+      // localStorage unavailable (private mode) — keep in-memory value only
+    }
+  }, []);
+
   // Called by menu/cart pages to scope the cart to the current restaurant
   const setSlug = useCallback((slug) => {
     if (slugRef.current === slug) return;
@@ -58,6 +77,11 @@ export function CartProvider({ children }) {
       setItems(saved ? JSON.parse(saved) : []);
     } catch {
       setItems([]);
+    }
+    try {
+      setTableTokenState(localStorage.getItem(tableTokenKey(slug)) || '');
+    } catch {
+      setTableTokenState('');
     }
   }, []);
 
@@ -114,7 +138,7 @@ export function CartProvider({ children }) {
 
   return (
     <CartContext.Provider
-      value={{ items, addItem, removeItem, updateQuantity, clearCart, total, itemCount, setSlug }}
+      value={{ items, addItem, removeItem, updateQuantity, clearCart, total, itemCount, setSlug, tableToken, setTableToken }}
     >
       {children}
     </CartContext.Provider>

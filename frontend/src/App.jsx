@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { CartProvider } from './context/CartContext';
 import { UserRoleProvider } from './context/UserRoleContext';
+import { ToastProvider } from './components/ui/Toast';
 
 const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -31,6 +32,11 @@ const UpgradePage = lazy(() => import('./features/payment/UpgradePage'));
 const OnboardingPage = lazy(() => import('./features/restaurant/OnboardingPage'));
 const SubscriptionPage = lazy(() => import('./features/restaurant/SubscriptionPage'));
 const WaiterPage = lazy(() => import('./features/waiter/WaiterPage'));
+const OrderTrackingPage = lazy(() => import('./features/client/OrderTrackingPage'));
+const StaffPage = lazy(() => import('./features/restaurant/StaffPage'));
+const SplitBillPage = lazy(() => import('./features/payment/SplitBillPage'));
+const ReservePage = lazy(() => import('./features/client/ReservePage'));
+const ReservationsPage = lazy(() => import('./features/restaurant/ReservationsPage'));
 const AccountPage = lazy(() => import('./features/client/AccountPage'));
 
 function PageLoader() {
@@ -45,6 +51,7 @@ function PageLoader() {
 
 function AppRoutes() {
   return (
+    <ToastProvider>
     <CartProvider>
       <UserRoleProvider>
         <Suspense fallback={<PageLoader />}>
@@ -56,6 +63,9 @@ function AppRoutes() {
             <Route path="/menu/:slug/tip" element={<TipPage />} />
             <Route path="/menu/:slug/checkout" element={<CheckoutPage />} />
             <Route path="/menu/:slug/thank-you" element={<ThankYouPage />} />
+            <Route path="/menu/:slug/order/:orderId" element={<OrderTrackingPage />} />
+            <Route path="/menu/:slug/split" element={<SplitBillPage />} />
+            <Route path="/menu/:slug/reserve" element={<ReservePage />} />
             <Route path="/kds/:slug" element={<KitchenScreen />} />
 
             {/* Client */}
@@ -71,6 +81,8 @@ function AppRoutes() {
             <Route path="/tables/:menuSlug" element={<RequireOwner><TablesPage /></RequireOwner>} />
             <Route path="/restaurant/dashboard" element={<RequireOwner><RestaurantDashboardPage /></RequireOwner>} />
             <Route path="/restaurant/:slug/settings" element={<RequireOwner><RestaurantSettingsPage /></RequireOwner>} />
+            <Route path="/staff/:slug" element={<RequireOwner><StaffPage /></RequireOwner>} />
+            <Route path="/reservations/:slug" element={<RequireOwner><ReservationsPage /></RequireOwner>} />
             <Route path="/restaurant/subscription" element={<RequireOwner><SubscriptionPage /></RequireOwner>} />
             <Route path="/dashboard" element={<RequireOwner><RestaurantDashboardPage /></RequireOwner>} />
             <Route path="/dashboard/:slug" element={<RequireOwner><DashboardConversationsPage /></RequireOwner>} />
@@ -82,6 +94,7 @@ function AppRoutes() {
         </Suspense>
       </UserRoleProvider>
     </CartProvider>
+    </ToastProvider>
   );
 }
 

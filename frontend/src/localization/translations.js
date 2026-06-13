@@ -64,6 +64,42 @@ export const translations = {
     "menu.retry": "Try again",
     "menu.notFound": "Menu not found",
     "menu.categories": "Menu categories",
+
+    // Tip page
+    "tip.back": "Cart",
+    "tip.title": "Add a tip",
+    "tip.subtitle": "Your generosity is appreciated by the whole team.",
+    "tip.custom": "Custom amount",
+    "tip.confirm": "Confirm",
+    "tip.subtotal": "Subtotal",
+    "tip.tip": "Tip",
+    "tip.total": "Total",
+    "tip.none": "No tip",
+
+    // Thank you page
+    "thankyou.successTitle": "Payment confirmed!",
+    "thankyou.successSub": "Your order has been sent to the kitchen.",
+    "thankyou.errorTitle": "Payment failed",
+    "thankyou.errorSub": "Your card was not charged. Please try again.",
+    "thankyou.retry": "Try again",
+    "thankyou.backMenu": "Back to menu",
+    "thankyou.track": "Track my order",
+    "thankyou.receipt": "Download receipt",
+    "thankyou.pickupNumber": "Pickup number",
+
+    // Cart VAT
+    "cart.vatFood": "VAT 10% (food)",
+    "cart.vatAlcohol": "VAT 20% (alcoholic drinks)",
+    "cart.minimum": "Minimum order",
+
+    // KDS columns
+    "kds.pending": "Pending",
+    "kds.inProgress": "In progress",
+    "kds.ready": "Ready",
+    "kds.done": "Served / Picked up",
+    "kds.take": "Take",
+    "kds.markReady": "Ready",
+    "kds.serve": "Serve",
   },
   
   fr: {
@@ -131,6 +167,42 @@ export const translations = {
     "menu.retry": "Réessayer",
     "menu.notFound": "Menu introuvable",
     "menu.categories": "Catégories du menu",
+
+    // Tip page
+    "tip.back": "Panier",
+    "tip.title": "Ajouter un pourboire",
+    "tip.subtitle": "Votre geste est apprécié par toute l'équipe.",
+    "tip.custom": "Montant libre",
+    "tip.confirm": "Confirmer",
+    "tip.subtotal": "Sous-total",
+    "tip.tip": "Pourboire",
+    "tip.total": "Total",
+    "tip.none": "Sans pourboire",
+
+    // Thank you page
+    "thankyou.successTitle": "Paiement confirmé !",
+    "thankyou.successSub": "Votre commande a été transmise à la cuisine.",
+    "thankyou.errorTitle": "Paiement non abouti",
+    "thankyou.errorSub": "Votre carte n'a pas été débitée. Veuillez réessayer.",
+    "thankyou.retry": "Réessayer",
+    "thankyou.backMenu": "Retour au menu",
+    "thankyou.track": "Suivre ma commande",
+    "thankyou.receipt": "Télécharger le reçu",
+    "thankyou.pickupNumber": "Numéro de retrait",
+
+    // Cart VAT
+    "cart.vatFood": "TVA 10% (plats)",
+    "cart.vatAlcohol": "TVA 20% (boissons alcoolisées)",
+    "cart.minimum": "Montant minimum",
+
+    // KDS columns
+    "kds.pending": "En attente",
+    "kds.inProgress": "En préparation",
+    "kds.ready": "Prêt",
+    "kds.done": "Servi / Retiré",
+    "kds.take": "Prendre en charge",
+    "kds.markReady": "Prêt",
+    "kds.serve": "Servir",
   },
   
   es: {
@@ -198,6 +270,42 @@ export const translations = {
     "menu.retry": "Reintentar",
     "menu.notFound": "Menú no encontrado",
     "menu.categories": "Categorías del menú",
+
+    // Tip page
+    "tip.back": "Carrito",
+    "tip.title": "Añadir propina",
+    "tip.subtitle": "Tu generosidad es apreciada por todo el equipo.",
+    "tip.custom": "Monto personalizado",
+    "tip.confirm": "Confirmar",
+    "tip.subtotal": "Subtotal",
+    "tip.tip": "Propina",
+    "tip.total": "Total",
+    "tip.none": "Sin propina",
+
+    // Thank you page
+    "thankyou.successTitle": "¡Pago confirmado!",
+    "thankyou.successSub": "Su pedido ha sido enviado a la cocina.",
+    "thankyou.errorTitle": "Pago fallido",
+    "thankyou.errorSub": "Su tarjeta no fue cobrada. Por favor, inténtelo de nuevo.",
+    "thankyou.retry": "Reintentar",
+    "thankyou.backMenu": "Volver al menú",
+    "thankyou.track": "Seguir mi pedido",
+    "thankyou.receipt": "Descargar recibo",
+    "thankyou.pickupNumber": "Número de recogida",
+
+    // Cart VAT
+    "cart.vatFood": "IVA 10% (platos)",
+    "cart.vatAlcohol": "IVA 20% (bebidas alcohólicas)",
+    "cart.minimum": "Pedido mínimo",
+
+    // KDS columns
+    "kds.pending": "Pendiente",
+    "kds.inProgress": "En preparación",
+    "kds.ready": "Listo",
+    "kds.done": "Servido / Recogido",
+    "kds.take": "Tomar",
+    "kds.markReady": "Listo",
+    "kds.serve": "Servir",
   }
 };
 

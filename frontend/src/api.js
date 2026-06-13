@@ -1,5 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+// Normalise FastAPI error details (string or {code, message, upgrade_url} objects)
+function apiDetail(err, fallback) {
+  const d = err?.detail;
+  if (typeof d === 'string') return d;
+  if (d && typeof d === 'object' && d.message) return d.message;
+  return fallback;
+}
+
+
 // Generate or get session ID for conversation memory
 function getSessionId() {
   let sessionId = localStorage.getItem('chat_session_id');
@@ -159,7 +168,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Save failed (${res.status})`);
+      throw new Error(apiDetail(err, `Save failed (${res.status})`));
     }
     return res.json();
   },
@@ -173,7 +182,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Publish failed (${res.status})`);
+      throw new Error(apiDetail(err, `Publish failed (${res.status})`));
     }
     return res.json();
   },
@@ -186,7 +195,26 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Duplicate failed (${res.status})`);
+      throw new Error(apiDetail(err, `Duplicate failed (${res.status})`));
+    }
+    return res.json();
+  },
+
+  // Editor: upload item photo
+  async uploadItemImage(menuId, sectionIndex, itemIndex, file, token) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(
+      `${API_BASE}/api/v1/menus/${menuId}/items/${sectionIndex}/${itemIndex}/image`,
+      {
+        method: 'PATCH',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(apiDetail(err, `Image upload failed (${res.status})`));
     }
     return res.json();
   },
@@ -203,7 +231,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Failed to create tables (${res.status})`);
+      throw new Error(apiDetail(err, `Failed to create tables (${res.status})`));
     }
     return res.json();
   },
@@ -225,7 +253,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Delete failed (${res.status})`);
+      throw new Error(apiDetail(err, `Delete failed (${res.status})`));
     }
   },
 
@@ -243,7 +271,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Export failed');
+      throw new Error(apiDetail(err, 'Export failed'));
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -349,7 +377,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Checkout failed');
+      throw new Error(apiDetail(err, 'Checkout failed'));
     }
     return res.json();
   },
@@ -422,7 +450,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Export failed (${res.status})`);
+      throw new Error(apiDetail(err, `Export failed (${res.status})`));
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -441,7 +469,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Order failed (${res.status})`);
+      throw new Error(apiDetail(err, `Order failed (${res.status})`));
     }
     return res.json();
   },
@@ -471,6 +499,19 @@ export const api = {
       }
     );
     if (!res.ok) throw new Error(`KDS status update failed (${res.status})`);
+    return res.json();
+  },
+
+  async setItemAvailability(slug, itemName, available, token) {
+    const res = await fetch(`${API_BASE}/api/v1/kds/${slug}/items/availability`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ item_name: itemName, available }),
+    });
+    if (!res.ok) throw new Error(`Availability update failed (${res.status})`);
     return res.json();
   },
 
@@ -504,7 +545,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Update failed (${res.status})`);
+      throw new Error(apiDetail(err, `Update failed (${res.status})`));
     }
     return res.json();
   },
@@ -521,7 +562,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Logo upload failed (${res.status})`);
+      throw new Error(apiDetail(err, `Logo upload failed (${res.status})`));
     }
     return res.json(); // { logo_url }
   },
@@ -549,9 +590,59 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Payment intent failed (${res.status})`);
+      throw new Error(apiDetail(err, `Payment intent failed (${res.status})`));
     }
     return res.json(); // { client_secret, payment_intent_id, amount, currency, order_id, split_total, split_persons }
+  },
+
+  // Reservations
+  async createReservation(slug, body) {
+    const res = await fetch(`${API_BASE}/api/v1/reservations/${slug}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(apiDetail(err, `Reservation failed (${res.status})`));
+    }
+    return res.json();
+  },
+
+  async listReservations(slug, date, token) {
+    const params = date ? `?date=${encodeURIComponent(date)}` : '';
+    const res = await fetch(`${API_BASE}/api/v1/reservations/${slug}${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Failed to load reservations (${res.status})`);
+    return res.json();
+  },
+
+  async updateReservation(slug, reservationId, status, token) {
+    const res = await fetch(`${API_BASE}/api/v1/reservations/${slug}/${reservationId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error(`Failed to update reservation (${res.status})`);
+    return res.json();
+  },
+
+  // Split bill
+  async createSplitPayments(orderId, parts) {
+    const res = await fetch(`${API_BASE}/api/v1/payments/split`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: orderId, parts }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(apiDetail(err, `Split failed (${res.status})`));
+    }
+    return res.json();
   },
 
   // Waiter call
@@ -580,6 +671,131 @@ export const api = {
     });
   },
 
+  async getLiveStats(slug, token) {
+    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/live-stats`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Failed to load live stats (${res.status})`);
+    return res.json();
+  },
+
+  // Staff management (owner)
+  async listStaff(slug, token) {
+    const res = await fetch(`${API_BASE}/api/v1/staff/${slug}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Failed to load staff (${res.status})`);
+    return res.json();
+  },
+
+  async inviteStaff(slug, body, token) {
+    const res = await fetch(`${API_BASE}/api/v1/staff/${slug}/invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(apiDetail(err, `Invitation failed (${res.status})`));
+    }
+    return res.json();
+  },
+
+  async updateStaff(slug, staffId, body, token) {
+    const res = await fetch(`${API_BASE}/api/v1/staff/${slug}/${staffId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(apiDetail(err, `Update failed (${res.status})`));
+    }
+    return res.json();
+  },
+
+  async deactivateStaff(slug, staffId, token) {
+    const res = await fetch(`${API_BASE}/api/v1/staff/${slug}/${staffId}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok && res.status !== 204) throw new Error(`Deactivation failed (${res.status})`);
+  },
+
+  // Stripe Connect (owner)
+  async getConnectStatus(slug, token) {
+    const res = await fetch(`${API_BASE}/api/v1/payments/connect/status?slug=${encodeURIComponent(slug)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(apiDetail(err, `Connect status failed (${res.status})`));
+    }
+    return res.json();
+  },
+
+  async startConnectOnboarding(slug, token) {
+    const res = await fetch(`${API_BASE}/api/v1/payments/connect/onboard?slug=${encodeURIComponent(slug)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(apiDetail(err, `Connect onboarding failed (${res.status})`));
+    }
+    return res.json();
+  },
+
+  async updateWaiterCallStatus(slug, callId, status, token) {
+    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/waiter-calls/${callId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error(`Failed to update call status (${res.status})`);
+    return res.json();
+  },
+
+  async getTablesSummary(slug, token) {
+    const res = await fetch(`${API_BASE}/api/dashboard/menus/${slug}/tables-summary`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Failed to load tables summary (${res.status})`);
+    return res.json();
+  },
+
+  async listOrdersByTable(tableToken, token) {
+    const res = await fetch(`${API_BASE}/api/v1/orders/by-table/${tableToken}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Failed to load table orders (${res.status})`);
+    return res.json();
+  },
+
+  async updateTable(tableId, body, token) {
+    const res = await fetch(`${API_BASE}/api/v1/tables/${tableId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(apiDetail(err, `Failed to update table (${res.status})`));
+    }
+    return res.json();
+  },
+
   async submitFeedback({ slug, nps_score, comment, payment_intent_id, lang }) {
     const res = await fetch(`${API_BASE}/api/public/menus/${slug}/feedback`, {
       method: 'POST',
@@ -605,7 +821,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `PATCH ${url} failed (${res.status})`);
+      throw new Error(apiDetail(err, `PATCH ${url} failed (${res.status})`));
     }
     return { data: await res.json() };
   },
@@ -618,7 +834,7 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `POST ${url} failed (${res.status})`);
+      throw new Error(apiDetail(err, `POST ${url} failed (${res.status})`));
     }
     return { data: await res.json() };
   },
