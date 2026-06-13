@@ -361,37 +361,43 @@ async def kds_redis_subscriber() -> None:
     """Long-running task: subscribe to all KDS Redis channels and broadcast to WebSocket clients.
 
     Listens on pattern ``kds:*`` (one channel per restaurant slug).
-    Each message must be a JSON-encoded dict with at least ``{"type": "new_order"|"status_update", ...}``.
-    Forwards the decoded message to :data:`kds_manager`.broadcast(slug, event).
+    Reconnects automatically on timeout or connection drop.
     """
     from app.core import redis as redis_core
 
-    try:
-        client = redis_core.get_client()
-    except RuntimeError:
-        logger.warning("KDS subscriber: Redis not available, skipping")
-        return
-
-    pubsub = client.pubsub()
-    try:
-        await pubsub.psubscribe("kds:*")
-        logger.info("KDS Redis subscriber started (pattern kds:*)")
-        async for message in pubsub.listen():
-            if message.get("type") != "pmessage":
-                continue
-            try:
-                channel: str = message["channel"]  # e.g. "kds:le-bistrot"
-                slug = channel.split(":", 1)[1] if ":" in channel else channel
-                event = json.loads(message["data"])
-                await kds_manager.broadcast(slug, event)
-            except Exception as exc:
-                logger.warning("KDS subscriber message error: %s", exc)
-    except Exception as exc:
-        logger.error("KDS subscriber fatal error: %s", exc)
-    finally:
+    delay = 1.0
+    while True:
         try:
-            await pubsub.punsubscribe("kds:*")
-            await pubsub.aclose()
-        except Exception:
-            logger.exception("Failed to cleanly close KDS Redis pubsub")
-        logger.info("KDS Redis subscriber stopped")
+            client = redis_core.get_client()
+        except RuntimeError:
+            logger.warning("KDS subscriber: Redis not available, retrying in %ss", delay)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 30)
+            continue
+
+        pubsub = client.pubsub()
+        try:
+            await pubsub.psubscribe("kds:*")
+            logger.info("KDS Redis subscriber started (pattern kds:*)")
+            delay = 1.0  # reset backoff on successful connect
+            async for message in pubsub.listen():
+                if message.get("type") != "pmessage":
+                    continue
+                try:
+                    channel: str = message["channel"]  # e.g. "kds:le-bistrot"
+                    slug = channel.split(":", 1)[1] if ":" in channel else channel
+                    event = json.loads(message["data"])
+                    await kds_manager.broadcast(slug, event)
+                except Exception as exc:
+                    logger.warning("KDS subscriber message error: %s", exc)
+        except Exception as exc:
+            logger.warning("KDS subscriber reconnecting after error: %s", exc)
+        finally:
+            try:
+                await pubsub.punsubscribe("kds:*")
+                await pubsub.aclose()
+            except Exception:
+                pass
+
+        await asyncio.sleep(delay)
+        delay = min(delay * 2, 30)

@@ -50,6 +50,8 @@ async def init_redis() -> None:
         REDIS_URL,
         max_connections=20,
         decode_responses=True,
+        socket_keepalive=True,
+        socket_connect_timeout=5,
     )
     _client = aioredis.Redis(connection_pool=_pool)
     try:
